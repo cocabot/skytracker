@@ -12,8 +12,10 @@ class P2PGroupManager extends GroupManager {
     }
 
     async initializePeerJS() {
+        console.log('Initializing PeerJS...');
         try {
             await this.loadPeerJS();
+            console.log('PeerJS loaded successfully');
             this.setupPeer();
         } catch (error) {
             console.warn('PeerJS initialization failed, using localStorage:', error);
@@ -24,17 +26,33 @@ class P2PGroupManager extends GroupManager {
     loadPeerJS() {
         return new Promise((resolve, reject) => {
             if (window.Peer) {
+                console.log('PeerJS already loaded');
+                this.peerJSLoaded = true;
                 resolve();
                 return;
             }
 
+            console.log('Loading PeerJS from CDN...');
             const script = document.createElement('script');
             script.src = 'https://unpkg.com/peerjs@1.5.0/dist/peerjs.min.js';
             script.onload = () => {
+                console.log('PeerJS script loaded');
                 this.peerJSLoaded = true;
-                resolve();
+                // 少し待ってからresolve（PeerJSの初期化時間を確保）
+                setTimeout(() => {
+                    if (window.Peer) {
+                        console.log('Peer class available');
+                        resolve();
+                    } else {
+                        console.error('Peer class not available after script load');
+                        reject(new Error('Peer class not available'));
+                    }
+                }, 100);
             };
-            script.onerror = reject;
+            script.onerror = (error) => {
+                console.error('Failed to load PeerJS script:', error);
+                reject(error);
+            };
             document.head.appendChild(script);
         });
     }
@@ -460,25 +478,30 @@ class P2PGroupManager extends GroupManager {
     // デバッグ情報
     showDebugInfo() {
         const debugInfo = {
-            useLocalStorage: this.useLocalStorage,
-            isConnected: this.isConnected,
-            groupCode: this.groupCode,
-            currentUser: this.currentUser,
-            isHost: this.isHost,
-            connectionsCount: this.connections.size,
-            membersCount: this.members.size,
-            peerJSLoaded: this.peerJSLoaded,
-            peerId: this.peer ? this.peer.id : 'none'
+            mode: this.useLocalStorage ? 'ローカルストレージ' : 'P2P',
+            useLocalStorage: this.useLocalStorage || false,
+            isConnected: this.isConnected || false,
+            groupCode: this.groupCode || 'なし',
+            currentUser: this.currentUser || 'なし',
+            isHost: this.isHost || false,
+            connectionsCount: this.connections ? this.connections.size : 0,
+            membersCount: this.members ? this.members.size : 0,
+            peerJSLoaded: this.peerJSLoaded || false,
+            peerId: this.peer ? this.peer.id : 'なし',
+            peerOpen: this.peer ? this.peer.open : false
         };
 
+        console.log('=== P2P Debug Info ===');
         console.table(debugInfo);
         
         if (window.skyTracker) {
             window.skyTracker.showNotification(
-                `デバッグ: ${this.useLocalStorage ? 'ローカル' : 'P2P'}モード, 接続数: ${debugInfo.connectionsCount}, メンバー数: ${debugInfo.membersCount}`,
+                `デバッグ: ${debugInfo.mode}モード, 接続数: ${debugInfo.connectionsCount}, メンバー数: ${debugInfo.membersCount}`,
                 'info'
             );
         }
+        
+        return debugInfo;
     }
 
     // 接続品質の確認

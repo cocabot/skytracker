@@ -7,16 +7,8 @@ class SkyTracker {
         this.lastPosition = null;
         this.totalDistance = 0;
         this.settings = this.loadSettings();
-        // P2Pグループマネージャーが利用可能な場合はそれを使用
-        if (window.P2PGroupManager) {
-            this.groupManager = new P2PGroupManager();
-        } else if (window.RealtimeGroupManager) {
-            this.groupManager = new RealtimeGroupManager();
-        } else if (window.EnhancedGroupManager) {
-            this.groupManager = new EnhancedGroupManager();
-        } else {
-            this.groupManager = new GroupManager();
-        }
+        // P2Pグループマネージャーを強制的に使用
+        this.groupManager = new P2PGroupManager();
         
         this.init();
     }
