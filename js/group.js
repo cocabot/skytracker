@@ -51,6 +51,13 @@ class GroupManager {
             this.groupCode = code;
             this.saveGroupSettings();
             groupCodeInput.value = '';
+            
+            // 即座に自分の情報を共有
+            this.shareInitialPosition();
+            
+            // メンバーリストを更新
+            this.updateGroupMembers();
+            
             this.showNotification(`グループ "${code}" に参加しました。`, 'success');
         } catch (error) {
             this.showNotification('グループへの参加に失敗しました。', 'error');
@@ -97,31 +104,48 @@ class GroupManager {
     }
 
     updateGroupMembers() {
+        if (!this.groupCode) return;
+        
         // ローカルストレージから他のメンバーの情報を取得
         const groupKey = `skytracker_group_${this.groupCode}`;
         const groupData = JSON.parse(localStorage.getItem(groupKey) || '{}');
         
-        // 現在時刻から5分以内のメンバーのみ表示
-        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000);
+        // 現在時刻から10分以内のメンバーのみ表示（時間を延長）
+        const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
+        
+        // デバッグ情報
+        console.log('Group data:', groupData);
+        console.log('Current user:', this.currentUser);
         
         Object.keys(groupData).forEach(memberId => {
             const memberData = groupData[memberId];
-            if (memberData.lastUpdate > fiveMinutesAgo && memberId !== this.currentUser) {
+            console.log(`Checking member ${memberId}:`, memberData);
+            
+            if (memberData && memberData.lastUpdate > tenMinutesAgo && memberId !== this.currentUser) {
                 this.addMember({
                     id: memberId,
-                    name: memberData.name,
+                    name: memberData.name || 'Unknown User',
                     isCurrentUser: false
                 });
 
                 // 地図上にメンバーの位置を表示
                 if (memberData.position && window.skyTracker && window.skyTracker.mapManager) {
                     window.skyTracker.mapManager.addGroupMember(
-                        { id: memberId, name: memberData.name },
+                        { id: memberId, name: memberData.name || 'Unknown User' },
                         memberData.position
                     );
                 }
             }
         });
+        
+        // 自分自身も表示
+        if (!this.members.has(this.currentUser)) {
+            this.addMember({
+                id: this.currentUser,
+                name: this.getCurrentUsername() || 'あなた',
+                isCurrentUser: true
+            });
+        }
     }
 
     sharePosition(position) {
@@ -140,6 +164,26 @@ class GroupManager {
         };
 
         localStorage.setItem(groupKey, JSON.stringify(groupData));
+        console.log('Position shared:', groupData[this.currentUser]);
+    }
+
+    shareInitialPosition() {
+        // 現在位置または仮の位置を共有
+        let position = null;
+        
+        if (window.skyTracker && window.skyTracker.lastPosition) {
+            position = window.skyTracker.lastPosition;
+        } else {
+            // 仮の位置（東京駅）
+            position = {
+                latitude: 35.6812,
+                longitude: 139.7671,
+                altitude: 100,
+                timestamp: Date.now()
+            };
+        }
+        
+        this.sharePosition(position);
     }
 
     addMember(member) {
@@ -290,6 +334,41 @@ class GroupManager {
             code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
         return code;
+    }
+
+    // テスト用：ダミーメンバーを追加
+    addTestMembers() {
+        if (!this.groupCode) {
+            this.showNotification('まずグループに参加してください。', 'warning');
+            return;
+        }
+
+        const testMembers = [
+            { name: 'パイロット田中', lat: 35.6762, lng: 139.6503 },
+            { name: 'フライヤー佐藤', lat: 35.6863, lng: 139.6604 },
+            { name: 'スカイ山田', lat: 35.6662, lng: 139.6403 }
+        ];
+
+        const groupKey = `skytracker_group_${this.groupCode}`;
+        const groupData = JSON.parse(localStorage.getItem(groupKey) || '{}');
+
+        testMembers.forEach((member, index) => {
+            const memberId = `test_user_${index + 1}`;
+            groupData[memberId] = {
+                name: member.name,
+                position: {
+                    latitude: member.lat,
+                    longitude: member.lng,
+                    altitude: 1000 + Math.random() * 500,
+                    timestamp: Date.now()
+                },
+                lastUpdate: Date.now()
+            };
+        });
+
+        localStorage.setItem(groupKey, JSON.stringify(groupData));
+        this.updateGroupMembers();
+        this.showNotification('テストメンバーを追加しました。', 'success');
     }
 
     createNewGroup() {
