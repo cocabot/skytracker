@@ -137,9 +137,12 @@
                         <input type="text" id="groupCodeInput" placeholder="コードを入力">
                         <button class="btn btn-primary" id="joinGroupBtn">参加</button>
                     </div>
-                    <div style="margin-top: 10px;">
+                    <div style="margin-top: 10px; display: flex; gap: 5px;">
                         <button class="btn btn-secondary btn-sm" onclick="window.skyTracker.groupManager.addTestMembers()">
                             テストメンバー追加
+                        </button>
+                        <button class="btn btn-secondary btn-sm" onclick="window.skyTracker.groupManager.showDebugInfo && window.skyTracker.groupManager.showDebugInfo()">
+                            デバッグ情報
                         </button>
                     </div>
                 </div>
@@ -209,6 +212,7 @@
     <script src="js/data-backup.js"></script>
     <script src="js/group.js"></script>
     <script src="js/group-enhanced.js"></script>
+    <script src="js/realtime-group.js"></script>
     <script src="js/app.js"></script>
     <script src="js/map.js"></script>
     <script src="js/tracking.js"></script>

@@ -7,9 +7,14 @@ class SkyTracker {
         this.lastPosition = null;
         this.totalDistance = 0;
         this.settings = this.loadSettings();
-        // 拡張グループマネージャーが利用可能な場合はそれを使用
-        this.groupManager = window.EnhancedGroupManager ? 
-            new EnhancedGroupManager() : new GroupManager();
+        // リアルタイムグループマネージャーが利用可能な場合はそれを使用
+        if (window.RealtimeGroupManager) {
+            this.groupManager = new RealtimeGroupManager();
+        } else if (window.EnhancedGroupManager) {
+            this.groupManager = new EnhancedGroupManager();
+        } else {
+            this.groupManager = new GroupManager();
+        }
         
         this.init();
     }
