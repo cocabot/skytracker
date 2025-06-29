@@ -66,15 +66,27 @@ class P2PGroupManager extends GroupManager {
         // ユニークなPeer IDを生成
         const peerId = this.generatePeerId();
         
+        // 複数のPeerJSサーバーを試行
+        const servers = [
+            {
+                host: '0.peerjs.com',
+                port: 443,
+                path: '/',
+                secure: true
+            },
+            {
+                // 公式のPeerJSサーバー
+                secure: true
+            }
+        ];
+
         this.peer = new Peer(peerId, {
-            host: 'peerjs-server.herokuapp.com',
-            port: 443,
-            path: '/peerjs',
-            secure: true,
+            ...servers[1], // 公式サーバーを使用
             config: {
                 iceServers: [
                     { urls: 'stun:stun.l.google.com:19302' },
-                    { urls: 'stun:stun1.l.google.com:19302' }
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' }
                 ]
             }
         });
@@ -85,13 +97,35 @@ class P2PGroupManager extends GroupManager {
             this.showNotification('P2P接続が確立されました', 'success');
         });
 
+        // 接続タイムアウト（10秒）
+        setTimeout(() => {
+            if (!this.peer || !this.peer.open) {
+                console.log('Peer connection timeout, falling back to localStorage');
+                this.useLocalStorage = true;
+                this.showNotification('P2P接続がタイムアウトしました。ローカルモードで動作します。', 'warning');
+            }
+        }, 10000);
+
         this.peer.on('connection', (conn) => {
             this.handleIncomingConnection(conn);
         });
 
         this.peer.on('error', (error) => {
             console.error('Peer error:', error);
-            this.showNotification('P2P接続エラーが発生しました', 'error');
+            
+            // 接続エラーの場合、ローカルストレージにフォールバック
+            if (error.type === 'server-error' || error.type === 'socket-error' || error.type === 'network') {
+                console.log('P2P server unavailable, falling back to localStorage');
+                this.useLocalStorage = true;
+                this.showNotification('P2Pサーバーに接続できません。ローカルモードで動作します。', 'warning');
+                
+                // ローカルストレージモードで再初期化
+                if (this.groupCode) {
+                    super.connectToGroup(this.groupCode);
+                }
+            } else {
+                this.showNotification('P2P接続エラーが発生しました', 'error');
+            }
         });
 
         this.peer.on('disconnected', () => {
@@ -175,10 +209,14 @@ class P2PGroupManager extends GroupManager {
         }
 
         this.peer = new Peer(this.hostPeerId, {
-            host: 'peerjs-server.herokuapp.com',
-            port: 443,
-            path: '/peerjs',
-            secure: true
+            secure: true,
+            config: {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun1.l.google.com:19302' },
+                    { urls: 'stun:stun2.l.google.com:19302' }
+                ]
+            }
         });
 
         this.peer.on('open', (id) => {
