@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyTracker - スカイスポーツライブトラッキング</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#2563eb">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="SkyTracker">
+</head>
+<body>
+    <div class="app-container">
+        <!-- ヘッダー -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <i class="fas fa-paper-plane"></i>
+                    <h1>SkyTracker</h1>
+                </div>
+                <div class="header-controls">
+                    <button class="btn btn-secondary" id="groupBtn">
+                        <i class="fas fa-users"></i>
+                        グループ
+                    </button>
+                    <button class="btn btn-secondary" id="settingsBtn">
+                        <i class="fas fa-cog"></i>
+                        設定
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- メインコンテンツ -->
+        <main class="main-content">
+            <!-- 地図エリア -->
+            <div class="map-container">
+                <div id="map"></div>
+                
+                <!-- 地図コントロール -->
+                <div class="map-controls">
+                    <button class="map-control-btn" id="centerBtn" title="現在位置に移動">
+                        <i class="fas fa-crosshairs"></i>
+                    </button>
+                    <button class="map-control-btn" id="layerBtn" title="地図レイヤー">
+                        <i class="fas fa-layer-group"></i>
+                    </button>
+                    <button class="map-control-btn" id="fullscreenBtn" title="フルスクリーン">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 情報パネル -->
+            <div class="info-panel">
+                <!-- トラッキングコントロール -->
+                <div class="tracking-control">
+                    <button class="tracking-btn" id="trackingBtn">
+                        <i class="fas fa-play"></i>
+                        <span>トラッキング開始</span>
+                    </button>
+                    <div class="tracking-status" id="trackingStatus">
+                        <span class="status-indicator"></span>
+                        <span class="status-text">待機中</span>
+                    </div>
+                </div>
+
+                <!-- フライト情報 -->
+                <div class="flight-info">
+                    <div class="info-grid">
+                        <div class="info-card">
+                            <div class="info-label">時刻</div>
+                            <div class="info-value" id="currentTime">--:--:--</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-label">高度</div>
+                            <div class="info-value" id="altitude">--- m</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-label">スピード</div>
+                            <div class="info-value" id="speed">--- km/h</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-label">上昇率</div>
+                            <div class="info-value" id="vario">--- m/s</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-label">飛行時間</div>
+                            <div class="info-value" id="flightTime">00:00:00</div>
+                        </div>
+                        <div class="info-card">
+                            <div class="info-label">距離</div>
+                            <div class="info-value" id="distance">--- km</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- アクションボタン -->
+                <div class="action-buttons">
+                    <button class="btn btn-primary" id="exportBtn" disabled>
+                        <i class="fas fa-download"></i>
+                        IGCエクスポート
+                    </button>
+                    <button class="btn btn-secondary" id="analyticsBtn" disabled>
+                        <i class="fas fa-chart-line"></i>
+                        分析
+                    </button>
+                    <button class="btn btn-secondary" id="shareBtn" disabled>
+                        <i class="fas fa-share"></i>
+                        共有
+                    </button>
+                    <button class="btn btn-danger" id="clearBtn" disabled>
+                        <i class="fas fa-trash"></i>
+                        クリア
+                    </button>
+                </div>
+            </div>
+        </main>
+
+        <!-- グループパネル -->
+        <div class="group-panel" id="groupPanel">
+            <div class="panel-header">
+                <h3>グループメンバー</h3>
+                <button class="close-btn" id="closeGroupPanel">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="group-content">
+                <div class="group-code">
+                    <label>グループコード</label>
+                    <div class="input-group">
+                        <input type="text" id="groupCodeInput" placeholder="コードを入力">
+                        <button class="btn btn-primary" id="joinGroupBtn">参加</button>
+                    </div>
+                </div>
+                <div class="group-members" id="groupMembers">
+                    <!-- グループメンバーがここに表示される -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 設定パネル -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="panel-header">
+                <h3>設定</h3>
+                <button class="close-btn" id="closeSettingsPanel">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="settings-content">
+                <div class="setting-group">
+                    <label>ユーザー名</label>
+                    <input type="text" id="usernameInput" placeholder="あなたの名前">
+                </div>
+                <div class="setting-group">
+                    <label>単位設定</label>
+                    <select id="unitSelect">
+                        <option value="metric">メートル法</option>
+                        <option value="imperial">ヤード・ポンド法</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>GPS精度</label>
+                    <select id="gpsAccuracySelect">
+                        <option value="high">高精度</option>
+                        <option value="medium">中精度</option>
+                        <option value="low">低精度</option>
+                    </select>
+                </div>
+                <div class="setting-group">
+                    <label>自動保存</label>
+                    <input type="checkbox" id="autoSaveCheck" checked>
+                </div>
+            </div>
+        </div>
+
+        <!-- オーバーレイ -->
+        <div class="overlay" id="overlay"></div>
+
+        <!-- 通知 -->
+        <div class="notification" id="notification">
+            <div class="notification-content">
+                <span class="notification-text"></span>
+                <button class="notification-close">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- スクリプト -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/error-handler.js"></script>
+    <script src="js/performance-optimizer.js"></script>
+    <script src="js/onboarding.js"></script>
+    <script src="js/analytics.js"></script>
+    <script src="js/map-extensions.js"></script>
+    <script src="js/data-import.js"></script>
+    <script src="js/data-backup.js"></script>
+    <script src="js/group.js"></script>
+    <script src="js/group-enhanced.js"></script>
+    <script src="js/app.js"></script>
+    <script src="js/map.js"></script>
+    <script src="js/tracking.js"></script>
+    <script src="js/igc.js"></script>
+</body>
+</html>

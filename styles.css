@@ -1,0 +1,569 @@
+/* リセットとベース設定 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --primary-color: #2563eb;
+    --primary-dark: #1d4ed8;
+    --secondary-color: #64748b;
+    --success-color: #10b981;
+    --warning-color: #f59e0b;
+    --danger-color: #ef4444;
+    --background-color: #f8fafc;
+    --surface-color: #ffffff;
+    --text-primary: #1e293b;
+    --text-secondary: #64748b;
+    --border-color: #e2e8f0;
+    --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+    --border-radius: 8px;
+    --transition: all 0.2s ease-in-out;
+}
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background-color: var(--background-color);
+    color: var(--text-primary);
+    line-height: 1.6;
+    overflow: hidden;
+}
+
+/* アプリコンテナ */
+.app-container {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+/* ヘッダー */
+.header {
+    background: var(--surface-color);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: var(--shadow-sm);
+    z-index: 1000;
+}
+
+.header-content {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    max-width: 100%;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.logo i {
+    font-size: 1.5rem;
+    color: var(--primary-color);
+}
+
+.logo h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.header-controls {
+    display: flex;
+    gap: 0.5rem;
+}
+
+/* ボタン */
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: var(--transition);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.btn-primary {
+    background: var(--primary-color);
+    color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+    background: var(--primary-dark);
+}
+
+.btn-secondary {
+    background: var(--surface-color);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    background: var(--background-color);
+    color: var(--text-primary);
+}
+
+.btn-danger {
+    background: var(--danger-color);
+    color: white;
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: #dc2626;
+}
+
+/* メインコンテンツ */
+.main-content {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+/* 地図コンテナ */
+.map-container {
+    flex: 1;
+    position: relative;
+}
+
+#map {
+    width: 100%;
+    height: 100%;
+}
+
+.map-controls {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    z-index: 1000;
+}
+
+.map-control-btn {
+    width: 2.5rem;
+    height: 2.5rem;
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: var(--transition);
+    box-shadow: var(--shadow-md);
+}
+
+.map-control-btn:hover {
+    background: var(--background-color);
+    transform: translateY(-1px);
+}
+
+/* 情報パネル */
+.info-panel {
+    width: 320px;
+    background: var(--surface-color);
+    border-left: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+/* トラッキングコントロール */
+.tracking-control {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.tracking-btn {
+    width: 100%;
+    padding: 1rem;
+    background: var(--success-color);
+    color: white;
+    border: none;
+    border-radius: var(--border-radius);
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.tracking-btn:hover {
+    background: #059669;
+    transform: translateY(-1px);
+}
+
+.tracking-btn.active {
+    background: var(--danger-color);
+}
+
+.tracking-btn.active:hover {
+    background: #dc2626;
+}
+
+.tracking-status {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    font-size: 0.875rem;
+}
+
+.status-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--secondary-color);
+}
+
+.status-indicator.active {
+    background: var(--success-color);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* フライト情報 */
+.flight-info {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    flex: 1;
+}
+
+.info-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+}
+
+.info-card {
+    text-align: center;
+}
+
+.info-label {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.25rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.info-value {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+/* アクションボタン */
+.action-buttons {
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+/* パネル */
+.group-panel,
+.settings-panel {
+    position: fixed;
+    top: 0;
+    right: -400px;
+    width: 400px;
+    height: 100vh;
+    background: var(--surface-color);
+    border-left: 1px solid var(--border-color);
+    box-shadow: var(--shadow-lg);
+    transition: var(--transition);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+}
+
+.group-panel.open,
+.settings-panel.open {
+    right: 0;
+}
+
+.panel-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.panel-header h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+}
+
+.close-btn {
+    width: 2rem;
+    height: 2rem;
+    background: none;
+    border: none;
+    border-radius: var(--border-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: var(--transition);
+}
+
+.close-btn:hover {
+    background: var(--background-color);
+    color: var(--text-primary);
+}
+
+.group-content,
+.settings-content {
+    padding: 1.5rem;
+    flex: 1;
+    overflow-y: auto;
+}
+
+/* グループパネル */
+.group-code {
+    margin-bottom: 2rem;
+}
+
+.group-code label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.input-group {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.input-group input {
+    flex: 1;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 0.875rem;
+}
+
+.group-members {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+}
+
+.member-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.75rem;
+    background: var(--background-color);
+    border-radius: var(--border-radius);
+}
+
+.member-avatar {
+    width: 2rem;
+    height: 2rem;
+    background: var(--primary-color);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.member-info {
+    flex: 1;
+}
+
+.member-name {
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.member-status {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+/* 設定パネル */
+.setting-group {
+    margin-bottom: 1.5rem;
+}
+
+.setting-group label {
+    display: block;
+    font-size: 0.875rem;
+    font-weight: 500;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.setting-group input,
+.setting-group select {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    font-size: 0.875rem;
+}
+
+.setting-group input[type="checkbox"] {
+    width: auto;
+}
+
+/* オーバーレイ */
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    opacity: 0;
+    visibility: hidden;
+    transition: var(--transition);
+    z-index: 1500;
+}
+
+.overlay.active {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* 通知 */
+.notification {
+    position: fixed;
+    top: 1rem;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    background: var(--surface-color);
+    border: 1px solid var(--border-color);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    transition: var(--transition);
+    z-index: 3000;
+    min-width: 300px;
+    max-width: 500px;
+}
+
+.notification.show {
+    transform: translateX(-50%) translateY(0);
+}
+
+.notification-content {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1rem;
+}
+
+.notification-text {
+    font-size: 0.875rem;
+}
+
+.notification-close {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: var(--text-secondary);
+    padding: 0.25rem;
+}
+
+/* レスポンシブデザイン */
+@media (max-width: 768px) {
+    .main-content {
+        flex-direction: column;
+    }
+    
+    .info-panel {
+        width: 100%;
+        height: 300px;
+        border-left: none;
+        border-top: 1px solid var(--border-color);
+    }
+    
+    .group-panel,
+    .settings-panel {
+        width: 100%;
+        right: -100%;
+    }
+    
+    .header-content {
+        padding: 1rem;
+    }
+    
+    .logo h1 {
+        font-size: 1.25rem;
+    }
+    
+    .info-grid {
+        grid-template-columns: repeat(3, 1fr);
+    }
+    
+    .info-value {
+        font-size: 1rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .header-content {
+        padding: 0.75rem;
+    }
+    
+    .info-grid {
+        grid-template-columns: 1fr 1fr;
+        gap: 0.75rem;
+    }
+    
+    .tracking-control,
+    .flight-info,
+    .action-buttons {
+        padding: 1rem;
+    }
+}
+
+/* カスタムスクロールバー */
+::-webkit-scrollbar {
+    width: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--background-color);
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border-color);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--secondary-color);
+}

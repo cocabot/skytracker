@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SkyTracker Test Suite</title>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+        .test-header {
+            background: #2563eb;
+            color: white;
+            padding: 20px;
+            text-align: center;
+        }
+        .test-controls {
+            padding: 20px;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+        }
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .btn-primary {
+            background: #2563eb;
+            color: white;
+        }
+        .btn-secondary {
+            background: #64748b;
+            color: white;
+        }
+        .test-results {
+            padding: 20px;
+        }
+        .test-suite {
+            margin-bottom: 30px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        .suite-header {
+            background: #f1f5f9;
+            padding: 15px;
+            font-weight: 600;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .test-case {
+            padding: 10px 15px;
+            border-bottom: 1px solid #f1f5f9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .test-case:last-child {
+            border-bottom: none;
+        }
+        .test-status {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .status-pass {
+            background: #dcfce7;
+            color: #166534;
+        }
+        .status-fail {
+            background: #fecaca;
+            color: #991b1b;
+        }
+        .status-pending {
+            background: #fef3c7;
+            color: #92400e;
+        }
+        .summary {
+            background: #f8fafc;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .summary-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+        .stat-label {
+            font-size: 12px;
+            color: #64748b;
+            text-transform: uppercase;
+        }
+        .error-details {
+            background: #fef2f2;
+            border: 1px solid #fecaca;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            color: #991b1b;
+        }
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 10px 0;
+        }
+        .progress-fill {
+            height: 100%;
+            background: #10b981;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-header">
+            <h1>SkyTracker Test Suite</h1>
+            <p>自動テスト実行システム</p>
+        </div>
+        
+        <div class="test-controls">
+            <button class="btn btn-primary" onclick="runAllTests()">全テスト実行</button>
+            <button class="btn btn-secondary" onclick="runUnitTests()">単体テスト</button>
+            <button class="btn btn-secondary" onclick="runIntegrationTests()">統合テスト</button>
+            <button class="btn btn-secondary" onclick="clearResults()">結果クリア</button>
+        </div>
+        
+        <div class="test-results">
+            <div class="summary" id="test-summary" style="display: none;">
+                <h3>テスト結果サマリー</h3>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progress-fill"></div>
+                </div>
+                <div class="summary-stats">
+                    <div class="stat-item">
+                        <div class="stat-value" id="total-tests">0</div>
+                        <div class="stat-label">総テスト数</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="passed-tests" style="color: #10b981;">0</div>
+                        <div class="stat-label">成功</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="failed-tests" style="color: #ef4444;">0</div>
+                        <div class="stat-label">失敗</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-value" id="execution-time">0ms</div>
+                        <div class="stat-label">実行時間</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="test-suites"></div>
+        </div>
+    </div>
+
+    <!-- テスト対象のスクリプト -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="../js/error-handler.js"></script>
+    <script src="../js/performance-optimizer.js"></script>
+    <script src="../js/analytics.js"></script>
+    <script src="../js/igc.js"></script>
+    
+    <!-- テストフレームワーク -->
+    <script src="test-framework.js"></script>
+    
+    <!-- テストスイート -->
+    <script src="unit/error-handler.test.js"></script>
+    <script src="unit/igc-exporter.test.js"></script>
+    <script src="unit/analytics.test.js"></script>
+    <script src="integration/app-integration.test.js"></script>
+    
+    <script>
+        // テスト実行制御
+        let testResults = {
+            suites: [],
+            totalTests: 0,
+            passedTests: 0,
+            failedTests: 0,
+            executionTime: 0
+        };
+
+        function runAllTests() {
+            clearResults();
+            const startTime = performance.now();
+            
+            // 全テストスイートを実行
+            TestFramework.runAllSuites().then(results => {
+                const endTime = performance.now();
+                testResults.executionTime = Math.round(endTime - startTime);
+                displayResults(results);
+            });
+        }
+
+        function runUnitTests() {
+            clearResults();
+            const startTime = performance.now();
+            
+            TestFramework.runSuitesByType('unit').then(results => {
+                const endTime = performance.now();
+                testResults.executionTime = Math.round(endTime - startTime);
+                displayResults(results);
+            });
+        }
+
+        function runIntegrationTests() {
+            clearResults();
+            const startTime = performance.now();
+            
+            TestFramework.runSuitesByType('integration').then(results => {
+                const endTime = performance.now();
+                testResults.executionTime = Math.round(endTime - startTime);
+                displayResults(results);
+            });
+        }
+
+        function clearResults() {
+            document.getElementById('test-suites').innerHTML = '';
+            document.getElementById('test-summary').style.display = 'none';
+            testResults = {
+                suites: [],
+                totalTests: 0,
+                passedTests: 0,
+                failedTests: 0,
+                executionTime: 0
+            };
+        }
+
+        function displayResults(results) {
+            const suitesContainer = document.getElementById('test-suites');
+            
+            testResults.suites = results;
+            testResults.totalTests = results.reduce((sum, suite) => sum + suite.tests.length, 0);
+            testResults.passedTests = results.reduce((sum, suite) => 
+                sum + suite.tests.filter(test => test.status === 'pass').length, 0);
+            testResults.failedTests = testResults.totalTests - testResults.passedTests;
+            
+            // サマリー表示
+            updateSummary();
+            
+            // 各スイートの結果表示
+            results.forEach(suite => {
+                const suiteElement = createSuiteElement(suite);
+                suitesContainer.appendChild(suiteElement);
+            });
+        }
+
+        function updateSummary() {
+            document.getElementById('test-summary').style.display = 'block';
+            document.getElementById('total-tests').textContent = testResults.totalTests;
+            document.getElementById('passed-tests').textContent = testResults.passedTests;
+            document.getElementById('failed-tests').textContent = testResults.failedTests;
+            document.getElementById('execution-time').textContent = testResults.executionTime + 'ms';
+            
+            const progressPercent = testResults.totalTests > 0 ? 
+                (testResults.passedTests / testResults.totalTests) * 100 : 0;
+            document.getElementById('progress-fill').style.width = progressPercent + '%';
+        }
+
+        function createSuiteElement(suite) {
+            const suiteDiv = document.createElement('div');
+            suiteDiv.className = 'test-suite';
+            
+            const headerDiv = document.createElement('div');
+            headerDiv.className = 'suite-header';
+            headerDiv.textContent = `${suite.name} (${suite.tests.filter(t => t.status === 'pass').length}/${suite.tests.length})`;
+            suiteDiv.appendChild(headerDiv);
+            
+            suite.tests.forEach(test => {
+                const testDiv = document.createElement('div');
+                testDiv.className = 'test-case';
+                
+                const testName = document.createElement('span');
+                testName.textContent = test.name;
+                testDiv.appendChild(testName);
+                
+                const statusSpan = document.createElement('span');
+                statusSpan.className = `test-status status-${test.status}`;
+                statusSpan.textContent = test.status === 'pass' ? '成功' : '失敗';
+                testDiv.appendChild(statusSpan);
+                
+                if (test.status === 'fail' && test.error) {
+                    const errorDiv = document.createElement('div');
+                    errorDiv.className = 'error-details';
+                    errorDiv.textContent = test.error;
+                    testDiv.appendChild(errorDiv);
+                }
+                
+                suiteDiv.appendChild(testDiv);
+            });
+            
+            return suiteDiv;
+        }
+
+        // ページ読み込み時の初期化
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('SkyTracker Test Suite loaded');
+        });
+    </script>
+</body>
+</html>
