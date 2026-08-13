@@ -1,0 +1,13 @@
+{
+  "name": "SkyTracker",
+  "ports": [
+    { "name": "static-server", "port": 8000 }
+  ],
+  "terminals": [
+    {
+      "name": "static-server",
+      "command": "python3 -m http.server 8000 --bind 0.0.0.0",
+      "description": "Serves the SkyTracker static PWA at http://localhost:8000 (app at /, test suite at /tests/test-runner.html). Geolocation works because localhost is a secure context."
+    }
+  ]
+}
