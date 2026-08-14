@@ -161,5 +161,12 @@ describe('WeatherService', () => {
         const url = svc.buildForecastUrl(35.4, 138.6);
         expect(url).toContain('wind_speed_850hPa');
         expect(url).toContain('wind_speed_700hPa');
+        svc.lastForecast = {
+            hourTime: Date.parse('2026-08-14T06:00:00Z'),
+            timezone: 'Asia/Tokyo',
+            model: 'best_match',
+            aloft: { hasPressureWinds: true }
+        };
+        expect(svc.getStatus().message).toContain('15:00');
     });
 });

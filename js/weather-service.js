@@ -260,8 +260,14 @@ class WeatherService {
         if (!snap) {
             return { ok: false, message: '気象未取得', detail: 'まだ取得していません' };
         }
+        const tz = snap.timezone && snap.timezone !== 'auto' ? snap.timezone : 'Asia/Tokyo';
         const hour = snap.hourTime
-            ? new Date(snap.hourTime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+            ? new Date(snap.hourTime).toLocaleTimeString('ja-JP', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+                timeZone: tz
+            })
             : '--:--';
         const model = snap.model === 'best_match' ? 'Open-Meteo' : snap.model;
         const pressure = snap.aloft && snap.aloft.hasPressureWinds;
