@@ -24,13 +24,19 @@
     {
       "src": "/js/(.*)",
       "headers": {
-        "Cache-Control": "public, max-age=31536000"
+        "Cache-Control": "public, max-age=3600, must-revalidate"
       }
     },
     {
       "src": "/styles.css",
       "headers": {
-        "Cache-Control": "public, max-age=31536000"
+        "Cache-Control": "public, max-age=3600, must-revalidate"
+      }
+    },
+    {
+      "src": "/styles-race.css",
+      "headers": {
+        "Cache-Control": "public, max-age=3600, must-revalidate"
       }
     },
     {
