@@ -211,8 +211,10 @@ class ThermalPredictor {
         const rainPenalty = precip > 0.15 ? Math.min(0.92, 0.35 + precip / 1.6) : 0;
         const surfacePenalty = surfaceWind > 9 ? Math.min(0.4, (surfaceWind - 9) / 14) : 0;
 
-        const shear = Math.abs(flightWind - surfaceWind);
-        const bOverS = shear > 0.15 ? conv.wStar / shear : (conv.wStar > 0 ? 20 : 0);
+        // 10m と飛行高度の差の多くは接地境界層。CBL 内シアはその一部。
+        const rawShear = Math.abs(flightWind - surfaceWind);
+        const blShear = Math.max(0.2, rawShear * 0.28);
+        const bOverS = conv.wStar > 0 ? conv.wStar / blShear : 0;
         let bsPenalty = 0;
         if (bOverS < 3) bsPenalty = 0.45;
         else if (bOverS < 5) bsPenalty = 0.22;

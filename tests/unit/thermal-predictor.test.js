@@ -137,8 +137,10 @@ describe('ThermalPredictor', () => {
             cloudLow: 25, precipitation: 0, temperature2m: 24
         };
         const current = { temperature: 24, cloudCover: 25, precipitation: 0, wind: { speed: 4, from: 270 } };
-        const organized = predictor.scoreMeteo(aloft, current, { speed: 5, from: 270 });
+        const organized = predictor.scoreMeteo(aloft, current, { speed: 4.2, from: 270 });
         const sheared = predictor.scoreMeteo(aloft, current, { speed: 14, from: 270 });
+        expect(organized.bOverS).toBeGreaterThan(8);
+        expect(sheared.bOverS).toBeLessThan(3);
         expect(organized.bOverS).toBeGreaterThan(sheared.bOverS);
         expect(organized.climbMs).toBeGreaterThan(sheared.climbMs);
         expect(organized.score).toBeGreaterThan(sheared.score);
