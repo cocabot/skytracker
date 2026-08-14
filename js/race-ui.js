@@ -292,15 +292,30 @@ class RaceUI {
     }
 
     refreshInstruments() {
-        const pos = this.app.lastPosition;
-        if (pos) {
+        const pos = this.app.lastPosition || this.planningPosition();
+        if (pos && this.taskEngine.task) {
             this.instruments = this.computer.compute(pos);
             this.updateHud(this.instruments);
-            this.renderNav(this.instruments);
+            if (this.app.lastPosition) {
+                this.renderNav(this.instruments);
+            }
         } else if (this.taskEngine.task) {
             this.showHud(true);
             document.getElementById('raceHudNext').textContent = this.taskEngine.task.name;
         }
+    }
+
+    planningPosition() {
+        const tps = this.taskEngine.getTurnpoints();
+        if (!tps.length) return null;
+        const tp = tps[0];
+        return {
+            latitude: tp.lat,
+            longitude: tp.lon,
+            altitude: (tp.altitude || 0) + 800,
+            speed: 10,
+            timestamp: new Date()
+        };
     }
 
     updateHud(inst) {
