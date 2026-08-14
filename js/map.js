@@ -7,9 +7,9 @@ class MapManager {
         this.currentPositionMarker = null;
         this.groupMarkers = new Map();
         this.trackPoints = [];
-        
+        this.followPosition = false;
+
         this.initializeMap();
-        this.setupLayers();
     }
 
     initializeMap() {
@@ -239,9 +239,7 @@ class MapManager {
     }
 
     shouldFollowPosition() {
-        // 地図が手動で移動されていない場合のみ追従
-        // 簡単な実装として、常にfalseを返す（手動制御）
-        return false;
+        return !!this.followPosition;
     }
 
     centerOnCurrentPosition() {

@@ -1,0 +1,231 @@
+/* パイロンレース HUD / パネル / 地図オーバーレイ */
+
+.race-hud {
+    position: absolute;
+    left: 1rem;
+    bottom: 1.25rem;
+    z-index: 1100;
+    min-width: 280px;
+    max-width: min(520px, calc(100% - 2rem));
+    background: rgba(15, 23, 42, 0.86);
+    color: #f8fafc;
+    border-radius: 12px;
+    padding: 0.75rem 1rem;
+    box-shadow: var(--shadow-lg);
+    backdrop-filter: blur(8px);
+    font-variant-numeric: tabular-nums;
+}
+
+.race-hud.hidden {
+    display: none;
+}
+
+.race-hud-row {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.race-hud-row + .race-hud-row {
+    margin-top: 0.55rem;
+    padding-top: 0.55rem;
+    border-top: 1px solid rgba(248, 250, 252, 0.12);
+}
+
+.race-hud-primary .race-hud-tp {
+    flex: 1 1 140px;
+}
+
+.race-hud-label {
+    display: block;
+    font-size: 0.65rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #94a3b8;
+}
+
+.race-hud strong {
+    font-size: 1rem;
+    font-weight: 650;
+}
+
+.race-hud-metric {
+    min-width: 72px;
+}
+
+#raceHudMargin.positive { color: #4ade80; }
+#raceHudMargin.warning { color: #fbbf24; }
+#raceHudMargin.danger { color: #f87171; }
+
+.race-panel {
+    position: fixed;
+    top: 0;
+    right: -420px;
+    width: 400px;
+    height: 100vh;
+    background: var(--surface-color);
+    border-left: 1px solid var(--border-color);
+    box-shadow: var(--shadow-lg);
+    transition: var(--transition);
+    z-index: 2000;
+    display: flex;
+    flex-direction: column;
+}
+
+.race-panel.open {
+    right: 0;
+}
+
+.race-panel-content {
+    padding: 1.5rem;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.race-panel-actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+}
+
+.race-panel-actions .btn {
+    flex: 1;
+    justify-content: center;
+}
+
+.race-toggles label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.4rem;
+    font-size: 0.875rem;
+}
+
+.race-weather-card,
+.race-aloft,
+.race-task-list {
+    background: var(--background-color);
+    border-radius: var(--border-radius);
+    padding: 0.85rem;
+    margin-bottom: 1rem;
+}
+
+.race-weather-card h4,
+.race-aloft h4,
+.race-task-list h4 {
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.race-opt-dist {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.race-tp-ol {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.race-tp-ol li {
+    display: flex;
+    justify-content: space-between;
+    gap: 0.5rem;
+    padding: 0.4rem 0.5rem;
+    border-radius: 6px;
+    font-size: 0.85rem;
+}
+
+.race-tp-ol li.next {
+    background: #fef3c7;
+}
+
+.race-tp-ol li.tagged {
+    background: #dcfce7;
+}
+
+.race-tp-ol small {
+    color: var(--text-secondary);
+}
+
+.race-tp-chip {
+    background: rgba(15, 23, 42, 0.85);
+    color: white;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    text-align: center;
+    white-space: nowrap;
+}
+
+.race-tp-chip.sss { background: #2563eb; }
+.race-tp-chip.goal, .race-tp-chip.ess { background: #dc2626; }
+.race-tp-chip.turnpoint { background: #7c3aed; }
+
+.thermal-chip {
+    background: rgba(234, 88, 12, 0.92);
+    color: white;
+    font-size: 11px;
+    font-weight: 700;
+    border-radius: 999px;
+    padding: 1px 6px;
+    text-align: center;
+}
+
+.wind-vector {
+    background: transparent;
+    border: none;
+    text-align: center;
+}
+
+.wind-vector small {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    color: #0f172a;
+    text-shadow: 0 0 3px #fff;
+}
+
+.wind-vector-inner {
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.wind-shaft {
+    width: 3px;
+    height: 22px;
+    background: #0f172a;
+    clip-path: polygon(50% 0, 100% 100%, 0 100%);
+}
+
+.btn-sm {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+}
+
+.header-controls .btn i {
+    pointer-events: none;
+}
+
+@media (max-width: 768px) {
+    .race-panel {
+        width: 100%;
+        right: -100%;
+    }
+
+    .race-hud {
+        left: 0.5rem;
+        bottom: 0.5rem;
+        padding: 0.55rem 0.7rem;
+    }
+
+    .race-hud strong {
+        font-size: 0.9rem;
+    }
+}

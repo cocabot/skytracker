@@ -75,6 +75,8 @@ body {
 .header-controls {
     display: flex;
     gap: 0.5rem;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
 /* ボタン */
@@ -286,7 +288,8 @@ body {
 
 /* パネル */
 .group-panel,
-.settings-panel {
+.settings-panel,
+.race-panel {
     position: fixed;
     top: 0;
     right: -400px;
@@ -302,7 +305,8 @@ body {
 }
 
 .group-panel.open,
-.settings-panel.open {
+.settings-panel.open,
+.race-panel.open {
     right: 0;
 }
 
@@ -511,7 +515,8 @@ body {
     }
     
     .group-panel,
-    .settings-panel {
+    .settings-panel,
+    .race-panel {
         width: 100%;
         right: -100%;
     }

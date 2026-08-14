@@ -7,8 +7,7 @@ class SkyTracker {
         this.lastPosition = null;
         this.totalDistance = 0;
         this.settings = this.loadSettings();
-        // P2Pグループマネージャーを強制的に使用
-        this.groupManager = new P2PGroupManager();
+        this.groupManager = this.createGroupManager();
         
         this.init();
     }
@@ -40,6 +39,7 @@ class SkyTracker {
             shareBtn: document.getElementById('shareBtn'),
             clearBtn: document.getElementById('clearBtn'),
             groupBtn: document.getElementById('groupBtn'),
+            raceBtn: document.getElementById('raceBtn'),
             settingsBtn: document.getElementById('settingsBtn'),
             groupPanel: document.getElementById('groupPanel'),
             settingsPanel: document.getElementById('settingsPanel'),
@@ -77,6 +77,13 @@ class SkyTracker {
             this.clearTrack();
         });
 
+        // レースボタン
+        if (this.elements.raceBtn) {
+            this.elements.raceBtn.addEventListener('click', () => {
+                this.togglePanel('race');
+            });
+        }
+
         // グループボタン
         this.elements.groupBtn.addEventListener('click', () => {
             this.togglePanel('group');
@@ -94,6 +101,13 @@ class SkyTracker {
 
         document.getElementById('closeSettingsPanel').addEventListener('click', () => {
             this.closePanel('settings');
+        });
+
+        document.getElementById('addTestMembersBtn')?.addEventListener('click', () => {
+            this.groupManager.addTestMembers?.();
+        });
+        document.getElementById('groupDebugBtn')?.addEventListener('click', () => {
+            this.groupManager.showDebugInfo?.();
         });
 
         // オーバーレイクリック
@@ -169,7 +183,13 @@ class SkyTracker {
         // データバックアップ機能を初期化
         if (window.DataBackup) {
             this.dataBackup = new DataBackup();
-            window.dataBackup = this.dataBackup; // グローバルアクセス用
+            window.dataBackup = this.dataBackup;
+        }
+
+        if (window.RaceUI) {
+            this.raceUI = new RaceUI(this);
+            this.raceUI.startAutoRefresh();
+            this.raceUI.refreshWeather(true);
         }
     }
 
@@ -301,6 +321,10 @@ class SkyTracker {
                 lat: trackPoint.latitude,
                 lng: trackPoint.longitude
             });
+        }
+
+        if (this.raceUI) {
+            this.raceUI.onPosition(trackPoint, this.trackData);
         }
     }
 
@@ -522,8 +546,29 @@ class SkyTracker {
         }
     }
 
+    createGroupManager() {
+        if (typeof P2PGroupManager === 'function') {
+            return new P2PGroupManager();
+        }
+        if (typeof EnhancedGroupManager === 'function') {
+            return new EnhancedGroupManager();
+        }
+        if (typeof GroupManager === 'function') {
+            return new GroupManager();
+        }
+        return { isInGroup: () => false, sharePosition() {}, addTestMembers() {}, showDebugInfo() {} };
+    }
+
+    getPanel(panelType) {
+        if (panelType === 'group') return this.elements.groupPanel;
+        if (panelType === 'settings') return this.elements.settingsPanel;
+        if (panelType === 'race') return document.getElementById('racePanel');
+        return null;
+    }
+
     togglePanel(panelType) {
-        const panel = panelType === 'group' ? this.elements.groupPanel : this.elements.settingsPanel;
+        const panel = this.getPanel(panelType);
+        if (!panel) return;
         const isOpen = panel.classList.contains('open');
 
         this.closeAllPanels();
@@ -535,14 +580,15 @@ class SkyTracker {
     }
 
     closePanel(panelType) {
-        const panel = panelType === 'group' ? this.elements.groupPanel : this.elements.settingsPanel;
-        panel.classList.remove('open');
+        const panel = this.getPanel(panelType);
+        if (panel) panel.classList.remove('open');
         this.elements.overlay.classList.remove('active');
     }
 
     closeAllPanels() {
         this.elements.groupPanel.classList.remove('open');
         this.elements.settingsPanel.classList.remove('open');
+        document.getElementById('racePanel')?.classList.remove('open');
         this.elements.overlay.classList.remove('active');
     }
 

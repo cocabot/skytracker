@@ -27,8 +27,11 @@ class GroupManager {
         });
     }
 
+    getMembers() {
+        return Array.from(this.members.values());
+    }
+
     generateUserId() {
-        // ユニークなユーザーIDを生成
         return 'user_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
     }
 

@@ -283,16 +283,35 @@ class MapExtensions {
         const button = document.getElementById('weatherToggle');
         
         if (this.weatherLayer) {
-            // 気象レイヤーを非表示
             document.querySelector('.weather-overlay')?.remove();
+            this.clearWindArrows();
             this.weatherLayer = null;
             button.classList.remove('active');
         } else {
-            // 気象レイヤーを表示
+            this.syncWeatherFromRace();
             this.showWeatherOverlay();
             this.weatherLayer = true;
             button.classList.add('active');
         }
+    }
+
+    syncWeatherFromRace() {
+        const snapshot = window.skyTracker && window.skyTracker.raceUI && window.skyTracker.raceUI.snapshot;
+        if (!snapshot || !snapshot.current) return;
+        const c = snapshot.current;
+        this.weatherData = {
+            wind: {
+                speed: WeatherService ? WeatherService.msToKmh(c.wind.speed) : c.wind.speed * 3.6,
+                direction: c.wind.from,
+                gusts: WeatherService ? WeatherService.msToKmh(c.wind.gusts) : c.wind.gusts * 3.6
+            },
+            temperature: c.temperature,
+            humidity: c.humidity,
+            pressure: c.pressure,
+            visibility: 10,
+            cloudCover: c.cloudCover,
+            thermalStrength: (window.skyTracker.raceUI.prediction && window.skyTracker.raceUI.prediction.meteo.trigger) || 'unknown'
+        };
     }
 
     showWeatherOverlay() {
@@ -350,7 +369,9 @@ class MapExtensions {
     }
 
     addWindArrows() {
-        // 地図上に風向矢印を表示
+        this.clearWindArrows();
+        this.windMarkers = [];
+
         const windIcon = L.divIcon({
             className: 'wind-arrow',
             html: `<div class="arrow" style="transform: rotate(${this.weatherData.wind.direction}deg);">→</div>`,
@@ -358,16 +379,26 @@ class MapExtensions {
             iconAnchor: [15, 15]
         });
 
-        // 複数の位置に風向矢印を配置
         const bounds = this.mapManager.map.getBounds();
         const center = bounds.getCenter();
-        
-        for (let i = 0; i < 5; i++) {
-            const lat = center.lat + (Math.random() - 0.5) * 0.02;
-            const lng = center.lng + (Math.random() - 0.5) * 0.02;
-            
-            L.marker([lat, lng], { icon: windIcon }).addTo(this.mapManager.map);
+        const spanLat = Math.max(0.02, (bounds.getNorth() - bounds.getSouth()) / 3);
+        const spanLng = Math.max(0.02, (bounds.getEast() - bounds.getWest()) / 3);
+
+        for (let i = 0; i < 4; i++) {
+            const lat = center.lat + (i % 2 === 0 ? -spanLat / 2 : spanLat / 2);
+            const lng = center.lng + (i < 2 ? -spanLng / 2 : spanLng / 2);
+            const marker = L.marker([lat, lng], { icon: windIcon });
+            marker.addTo(this.mapManager.map);
+            this.windMarkers.push(marker);
         }
+    }
+
+    clearWindArrows() {
+        if (!this.windMarkers) return;
+        this.windMarkers.forEach((marker) => {
+            this.mapManager.map.removeLayer(marker);
+        });
+        this.windMarkers = [];
     }
 
     loadAirspaceData() {
