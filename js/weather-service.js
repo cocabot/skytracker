@@ -100,7 +100,9 @@ class WeatherService {
                 'direct_radiation',
                 'diffuse_radiation',
                 'precipitation',
-                'weather_code'
+                'weather_code',
+                'temperature_850hPa',
+                'soil_moisture_0_to_7cm'
             ].join(','),
             wind_speed_unit: 'ms',
             timezone: 'auto',
@@ -242,6 +244,8 @@ class WeatherService {
             cloudLow: Number(hour.cloud_cover_low ?? hour.cloud_cover ?? 0),
             cloudMid: Number(hour.cloud_cover_mid ?? 0),
             precipitation: Number(hour.precipitation ?? 0),
+            soilMoisture: hour.soil_moisture_0_to_7cm != null ? Number(hour.soil_moisture_0_to_7cm) : null,
+            temperature850: hour.temperature_850hPa != null ? Number(hour.temperature_850hPa) : null,
             lclM,
             cloudbaseM: lclM,
             hasPressureWinds: levels.some((l) => l.band === 'flight' && l.hPa)
@@ -338,7 +342,71 @@ class WeatherService {
     }
 
     /**
-     * 地図範囲の標高グリッド。サーマル発生源（尾根・南斜面）推定に使う。
+     * PG/HG の実フライト空域（既定 半径 45 km ≈ 直径 90 km）。
+     * 朝霧〜富士川クラスの XC を地図のズームに依存せず覆う。
+     */
+    static flightAirspaceBounds(center, options = {}) {
+        const radiusKm = options.radiusKm != null ? options.radiusKm : 45;
+        const padKm = options.padKm != null ? options.padKm : 15;
+        const maxSpanKm = options.maxSpanKm != null ? options.maxSpanKm : 160;
+        const lat = Number(center.lat);
+        const lon = Number(center.lon);
+        const dLat = radiusKm / 111.32;
+        const cos = Math.max(0.2, Math.cos(lat * Math.PI / 180));
+        const dLon = radiusKm / (111.32 * cos);
+        let south = lat - dLat;
+        let north = lat + dLat;
+        let west = lon - dLon;
+        let east = lon + dLon;
+        const extra = options.extraBounds;
+        if (extra) {
+            const pLat = padKm / 111.32;
+            const pLon = padKm / (111.32 * cos);
+            south = Math.min(south, extra.south - pLat);
+            north = Math.max(north, extra.north + pLat);
+            west = Math.min(west, extra.west - pLon);
+            east = Math.max(east, extra.east + pLon);
+        }
+        const clampSpan = (lo, hi, kmPerDeg) => {
+            const spanKm = (hi - lo) * kmPerDeg;
+            if (spanKm <= maxSpanKm) return { lo, hi };
+            const mid = (lo + hi) / 2;
+            const half = (maxSpanKm / 2) / kmPerDeg;
+            return { lo: mid - half, hi: mid + half };
+        };
+        const latSpan = clampSpan(south, north, 111.32);
+        south = latSpan.lo;
+        north = latSpan.hi;
+        const lonSpan = clampSpan(west, east, 111.32 * cos);
+        west = lonSpan.lo;
+        east = lonSpan.hi;
+        const spanKm = Geo && typeof Geo.distance === 'function'
+            ? Geo.distance(south, west, north, east) / 1000
+            : ((north - south) * 111.32);
+        return { south, north, west, east, radiusKm, spanKm };
+    }
+
+    async fetchElevationPoints(lats, lons) {
+        const CHUNK = WeatherService.ELEVATION_CHUNK;
+        const elevation = new Array(lats.length).fill(0);
+        for (let start = 0; start < lats.length; start += CHUNK) {
+            const end = Math.min(start + CHUNK, lats.length);
+            const params = new URLSearchParams({
+                latitude: lats.slice(start, end).join(','),
+                longitude: lons.slice(start, end).join(',')
+            });
+            const json = await this.fetchJson(`${this.elevationBase}?${params.toString()}`);
+            const el = json.elevation || [];
+            for (let i = 0; i < end - start; i++) {
+                elevation[start + i] = el[i] || 0;
+            }
+        }
+        return { elevation };
+    }
+
+    /**
+     * 地図範囲の標高グリッド。サーマル発生源（尾根・日射斜面）推定に使う。
+     * Open-Meteo elevation は約 100 点/リクエストなので分割する。
      */
     async fetchElevationGrid(bounds, rows = 8, cols = 8) {
         const south = bounds.south;
@@ -356,13 +424,7 @@ class WeatherService {
         const key = this.cacheKey('elev', {
             s: south.toFixed(3), n: north.toFixed(3), w: west.toFixed(3), e: east.toFixed(3), rows, cols
         });
-        const data = await this.getCached(key, () => {
-            const params = new URLSearchParams({
-                latitude: lats.join(','),
-                longitude: lons.join(',')
-            });
-            return this.fetchJson(`${this.elevationBase}?${params.toString()}`);
-        });
+        const data = await this.getCached(key, () => this.fetchElevationPoints(lats, lons));
 
         const elevations = data.elevation || [];
         const cells = [];
@@ -405,6 +467,8 @@ class WeatherService {
 }
 
 WeatherService.DEFAULT_FLIGHT_ALT = 1500;
+WeatherService.ELEVATION_CHUNK = 90;
+WeatherService.DEFAULT_AIRSPACE_KM = 45;
 WeatherService.PRESSURE_WIND_LEVELS = [
     { hPa: 925, speedKey: 'wind_speed_925hPa', dirKey: 'wind_direction_925hPa' },
     { hPa: 850, speedKey: 'wind_speed_850hPa', dirKey: 'wind_direction_850hPa' },

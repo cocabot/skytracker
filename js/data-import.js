@@ -227,6 +227,10 @@ class DataImporter {
             
             // ボタンを有効化
             window.skyTracker.enableButtons();
+
+            if (window.skyTracker.raceUI && typeof window.skyTracker.raceUI.ingestFlightLog === 'function') {
+                window.skyTracker.raceUI.ingestFlightLog(trackData);
+            }
         }
     }
 

@@ -6,6 +6,9 @@ class RaceUI {
         this.taskEngine = new TaskEngine();
         this.weather = new WeatherService();
         this.thermals = new ThermalPredictor();
+        this.climatology = typeof ThermalClimatology !== 'undefined'
+            ? new ThermalClimatology()
+            : null;
         this.wind = new WindEstimator();
         this.computer = new RaceComputer(this.taskEngine, this.wind);
         this.waypoints = new WaypointLibrary();
@@ -82,7 +85,7 @@ class RaceUI {
             legend.innerHTML = `
                 <div class="wx-legend-row"><span class="wx-k">風</span><span id="wxLegendWind">未取得</span></div>
                 <div class="wx-legend-row"><span class="wx-k wx-thermal">▲</span><span id="wxLegendThermal">予測サーマル（モデル+地形）</span></div>
-                <p class="wx-legend-note">矢印＝Open-Meteo気圧面の実データ　緑●＝GPS実測　▲＝予報</p>
+                <p class="wx-legend-note">矢印＝飛行空域の気圧面風　緑●＝GPS/大会ログ実測　▲＝RASP w*＋JHF大会気候値</p>
             `;
             document.querySelector('.map-container').appendChild(legend);
         }
@@ -640,7 +643,14 @@ class RaceUI {
     }
 
     onPosition(trackPoint, trackData) {
-        if (!this.taskEngine.task) return;
+        const track = trackData || this.app.trackData;
+        if (this.climatology && track && track.length && track.length % 40 === 0) {
+            this.climatology.ingestTrack(track.slice(-160), this.thermals);
+        }
+        if (!this.taskEngine.task) {
+            this.renderLiveThermals(track);
+            return;
+        }
         this.taskEngine.updatePosition(trackPoint);
         this.wind.updateFromTrack(trackData || this.app.trackData);
         this.instruments = this.computer.compute(trackPoint);
@@ -876,11 +886,57 @@ class RaceUI {
         this._wxMoveTimer = setTimeout(() => this.refreshWeather(false), 1200);
     }
 
+    taskBounds() {
+        const tps = this.taskEngine && this.taskEngine.getTurnpoints && this.taskEngine.getTurnpoints();
+        if (!tps || tps.length < 2) return null;
+        const extra = { south: 90, north: -90, west: 180, east: -180 };
+        tps.forEach((tp) => {
+            extra.south = Math.min(extra.south, tp.lat);
+            extra.north = Math.max(extra.north, tp.lat);
+            extra.west = Math.min(extra.west, tp.lon);
+            extra.east = Math.max(extra.east, tp.lon);
+        });
+        return extra;
+    }
+
+    computeAirspace(center) {
+        let radiusKm = WeatherService.DEFAULT_AIRSPACE_KM || 45;
+        try {
+            const b = this.mapManager.map.getBounds();
+            const span = Geo.distance(b.getSouth(), b.getWest(), b.getNorth(), b.getEast()) / 1000;
+            if (span > 95) radiusKm = Math.min(80, span / 2);
+        } catch (e) {
+            // map not ready
+        }
+        return WeatherService.flightAirspaceBounds(
+            { lat: center.lat, lon: center.lng },
+            { radiusKm, extraBounds: this.taskBounds() }
+        );
+    }
+
+    airspaceShifted(a, b) {
+        if (!a || !b) return true;
+        return Math.abs(a.south - b.south) > 0.05
+            || Math.abs(a.north - b.north) > 0.05
+            || Math.abs(a.west - b.west) > 0.05
+            || Math.abs(a.east - b.east) > 0.05;
+    }
+
+    ingestFlightLog(trackData) {
+        if (!trackData || !trackData.length) return;
+        if (this.climatology) {
+            this.climatology.ingestTrack(trackData, this.thermals);
+        }
+        this.refreshWeather(false);
+    }
+
     async refreshWeather(force) {
         const center = this.mapManager.map.getCenter();
+        const airspace = this.computeAirspace(center);
         if (!force && this.lastWeatherCenter) {
             const moved = Geo.distance(center.lat, center.lng, this.lastWeatherCenter.lat, this.lastWeatherCenter.lng);
-            if (moved < 2500 && this.snapshot) {
+            if (moved < 12000 && this.snapshot && this.prediction) {
+                this.airspaceBounds = airspace;
                 this.renderOverlays();
                 return;
             }
@@ -891,21 +947,21 @@ class RaceUI {
             const snapshot = await this.weather.fetchForecast(center.lat, center.lng);
             this.snapshot = snapshot;
             this.lastWeatherCenter = { lat: center.lat, lng: center.lng };
+            this.airspaceBounds = airspace;
             this.wind.updateFromWeather(
                 snapshot,
                 WeatherService.flightWindAltitude(snapshot, this.app.lastPosition && this.app.lastPosition.altitude)
             );
 
-            const b = this.mapManager.map.getBounds();
-            const grid = await this.weather.fetchElevationGrid({
-                south: b.getSouth(),
-                north: b.getNorth(),
-                west: b.getWest(),
-                east: b.getEast()
-            }, 7, 7);
+            let grid = this.elevationGrid;
+            if (force || !grid || this.airspaceShifted(airspace, this.lastAirspace)) {
+                grid = await this.weather.fetchElevationGrid(airspace, 15, 15);
+                this.elevationGrid = grid;
+                this.lastAirspace = airspace;
+            }
 
             const live = this.thermals.extractLiveThermals(this.app.trackData || []);
-            this.prediction = this.thermals.predict(snapshot, grid, live);
+            this.prediction = this.thermals.predict(snapshot, grid, live, this.climatology);
             this.renderWeatherCard();
             this.updateWxLegend();
             this.renderOverlays();
@@ -948,6 +1004,7 @@ class RaceUI {
             <div class="weather-item"><span>CAPE / LI</span><span>${a.cape.toFixed(0)} J/kg / ${a.liftedIndex == null ? '--' : a.liftedIndex.toFixed(1)}</span></div>
             <div class="weather-item"><span>混合層 / 雲底(LCL)</span><span>${a.blh.toFixed(0)} m / ${lcl}</span></div>
             <div class="weather-item"><span>日射</span><span>${a.shortwave.toFixed(0)} W/m²</span></div>
+            <div class="weather-item"><span>w* / B/S</span><span>${meteo && meteo.wStar != null ? `${meteo.wStar.toFixed(2)} m/s / ${meteo.bOverS != null && Number.isFinite(meteo.bOverS) ? meteo.bOverS.toFixed(1) : '--'}` : '--'}</span></div>
             <div class="weather-item"><span>サーマル</span><span>${meteo ? `予測 ${meteo.trigger} / ${meteo.climbMs.toFixed(1)} m/s / 天井 ${meteo.maxAlt.toFixed(0)} m` : '--'}　実測 ${liveCount} 個</span></div>
         `;
         if (aloftEl) {
@@ -980,9 +1037,12 @@ class RaceUI {
         windEl.textContent = `${Geo.cardinal(fused.from)} ${WeatherService.msToKmh(fused.speed).toFixed(0)} km/h @${Math.round(fused.altitude || alt)}m（${src} / ${status.message}）`;
         const meteo = this.prediction && this.prediction.meteo;
         const live = (this.prediction && this.prediction.liveThermals) || [];
+        const span = this.airspaceBounds && this.airspaceBounds.radiusKm
+            ? this.airspaceBounds.radiusKm
+            : (WeatherService.DEFAULT_AIRSPACE_KM || 45);
         thEl.textContent = meteo
-            ? `予測 ${meteo.climbMs.toFixed(1)} m/s ${meteo.trigger}　実測 ${live.length} 個`
-            : '予測サーマル（モデル+地形）';
+            ? `空域 ${span}km · ▲予測(w* ${meteo.wStar != null ? meteo.wStar.toFixed(1) : '--'}) ${meteo.climbMs.toFixed(1)} m/s ${meteo.trigger}　実測 ${live.length}`
+            : '予測サーマル（RASP w* + 地形）';
     }
 
     renderOverlays() {
@@ -1001,19 +1061,20 @@ class RaceUI {
             WeatherService.flightWindAltitude(this.snapshot, this.app.lastPosition && this.app.lastPosition.altitude)
         );
         if (!wind || wind.source === 'none') return;
-        const bounds = this.mapManager.map.getBounds();
-        const sw = bounds.getSouthWest();
-        const ne = bounds.getNorthEast();
+        const box = this.airspaceBounds || (() => {
+            const b = this.mapManager.map.getBounds();
+            return { south: b.getSouth(), north: b.getNorth(), west: b.getWest(), east: b.getEast() };
+        })();
         const kmh = WeatherService.msToKmh(wind.speed).toFixed(0);
         const alt = Math.round(wind.altitude || 0);
         const src = wind.source === 'gps' ? 'GPS' : (wind.source === 'fused' ? '融合' : '予報');
-        const rows = 3;
-        const cols = 3;
-        for (let r = 1; r < rows; r++) {
-            for (let c = 1; c < cols; c++) {
-                const lat = sw.lat + (ne.lat - sw.lat) * (r / rows);
-                const lng = sw.lng + (ne.lng - sw.lng) * (c / cols);
-                const showLabel = r === 1 && c === 1;
+        const rows = 5;
+        const cols = 5;
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                const lat = box.south + (box.north - box.south) * (r / Math.max(rows - 1, 1));
+                const lng = box.west + (box.east - box.west) * (c / Math.max(cols - 1, 1));
+                const showLabel = r === Math.floor(rows / 2) && c === Math.floor(cols / 2);
                 const icon = L.divIcon({
                     className: 'wind-vector',
                     html: `<div class="wind-vector-inner" style="transform:rotate(${wind.to}deg)">
@@ -1045,7 +1106,7 @@ class RaceUI {
                 <strong>${label}サーマル</strong><br>
                 上昇 ${s.climbMs.toFixed(1)} m/s<br>
                 天井 約 ${s.maxAlt.toFixed(0)} m<br>
-                ${live ? 'GPSトラックの上昇・旋回' : 'Open-Meteo対流 + 地形（尾根・南斜面）'}
+                ${live ? 'GPS/フライトログの上昇' : 'RASP w* + 日射斜面・風上尾根 + JHF大会ログ'}
             `).addTo(this.layers.thermals);
 
             if (s.driftLat && (s.driftLat !== s.lat || s.driftLon !== s.lon)) {
