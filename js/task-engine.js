@@ -68,6 +68,7 @@ class TaskEngine {
             name: raw.name || raw.taskName || 'パイロンレース',
             type: (raw.taskType || raw.type || 'RACE').toUpperCase(),
             earthModel: raw.earthModel || 'WGS84',
+            rules: raw.rules || 'CIVL S7 / JHF',
             turnpoints,
             sss: {
                 direction: (raw.sss && raw.sss.direction) || 'EXIT',
@@ -76,7 +77,8 @@ class TaskEngine {
             goal: {
                 type: (raw.goal && raw.goal.type) || 'CYLINDER',
                 deadline: (raw.goal && raw.goal.deadline) || null
-            }
+            },
+            meta: raw.meta || {}
         };
     }
 
@@ -93,10 +95,43 @@ class TaskEngine {
     optimize() {
         if (!this.task) return null;
         const route = Geo.optimizeCylinderRoute(this.task.turnpoints);
+        const centerDistance = this.centerDistanceM();
         return {
             ...route,
-            totalDistanceKm: route.totalDistance / 1000
+            totalDistanceKm: route.totalDistance / 1000,
+            centerDistance,
+            centerDistanceKm: centerDistance / 1000
         };
+    }
+
+    /**
+     * CIVL タスク距離：円筒中心を結ぶ。TAKEOFF と SSS が同一点ならその脚は除外。
+     */
+    centerDistanceM() {
+        if (!this.task) return 0;
+        const tps = this.task.turnpoints;
+        let distance = 0;
+        for (let i = 1; i < tps.length; i++) {
+            const a = tps[i - 1];
+            const b = tps[i];
+            const leg = Geo.distance(a.lat, a.lon, b.lat, b.lon);
+            if (a.type === 'TAKEOFF' && b.type === 'SSS' && leg < 50) continue;
+            distance += leg;
+        }
+        return distance;
+    }
+
+    /**
+     * CIVL Cat 1 観測ゾーン許容：max(5 m, 半径の 0.1%)
+     */
+    static tagToleranceM(radius) {
+        const r = Number(radius) || 0;
+        return Math.max(5, r * 0.001);
+    }
+
+    observationRadius(tp) {
+        const radius = tp && Number(tp.radius) || 0;
+        return radius + TaskEngine.tagToleranceM(radius);
     }
 
     getTurnpoints() {
@@ -183,7 +218,7 @@ class TaskEngine {
         }
 
         const sss = this.task.turnpoints[sssIndex];
-        const inside = Geo.isInsideCylinder(point.lat, point.lon, sss.lat, sss.lon, sss.radius);
+        const inside = Geo.isInsideCylinder(point.lat, point.lon, sss.lat, sss.lon, this.observationRadius(sss));
         const direction = this.task.sss.direction || 'EXIT';
 
         if (!this.isStartGateOpen(now)) {
@@ -224,7 +259,7 @@ class TaskEngine {
             if (tp.type === 'TAKEOFF' || tp.type === 'SSS') continue;
             if (i > this.state.nextIndex) break;
 
-            const inside = Geo.isInsideCylinder(point.lat, point.lon, tp.lat, tp.lon, tp.radius);
+            const inside = Geo.isInsideCylinder(point.lat, point.lon, tp.lat, tp.lon, this.observationRadius(tp));
             if (!inside) continue;
 
             this.state.tagged[i] = now;
@@ -312,7 +347,9 @@ class TaskEngine {
             goalTime: this.state.goalTime,
             optimizedDistanceM: this.optimized ? this.optimized.totalDistance : 0,
             inNextCylinder: !!(next && lat != null &&
-                Geo.isInsideCylinder(lat, lon, next.lat, next.lon, next.radius))
+                Geo.isInsideCylinder(lat, lon, next.lat, next.lon, this.observationRadius(next))),
+            taskDistanceKm: this.optimized ? this.optimized.centerDistanceKm : 0,
+            optimizedDistanceKm: this.optimized ? this.optimized.totalDistanceKm : 0
         };
     }
 
@@ -409,17 +446,19 @@ class TaskEngine {
             throw new Error('CUP ファイルにウェイポイントがありません');
         }
 
+        const civl = (typeof WaypointLibrary !== 'undefined' && WaypointLibrary.CIVL) || TaskEngine.CIVL;
         const turnpoints = waypoints.map((wp, i) => ({
             ...wp,
-            radius: i === 0 ? 400 : (i === waypoints.length - 1 ? 1000 : 400),
+            radius: i === 0 ? civl.TAKEOFF : (i === waypoints.length - 1 ? civl.GOAL : civl.TP),
             type: i === 0 ? 'TAKEOFF' : (i === waypoints.length - 1 ? 'GOAL' : 'TURNPOINT')
         }));
 
         if (turnpoints.length >= 3) {
             turnpoints[1].type = 'SSS';
-            turnpoints[1].radius = Math.max(turnpoints[1].radius, 1000);
+            turnpoints[1].radius = civl.SSS;
             if (turnpoints.length >= 4) {
                 turnpoints[turnpoints.length - 2].type = 'ESS';
+                turnpoints[turnpoints.length - 2].radius = civl.ESS;
             }
         }
 
@@ -483,7 +522,10 @@ class TaskEngine {
 
     static parseAuto(text, filename = '') {
         const name = filename.toLowerCase();
-        const trimmed = String(text).trim();
+        const trimmed = String(text).replace(/^\uFEFF/, '').trim();
+        if (name.endsWith('.wpt') || /\$FormatGEO/i.test(trimmed.slice(0, 80)) || /OziExplorer\s+Waypoint/i.test(trimmed.slice(0, 120))) {
+            throw new Error('WPT はウェイポイントです。レースパネルの「WPT / CUP / GPX」から取り込んでください');
+        }
         if (name.endsWith('.xctsk') || trimmed.startsWith('{')) {
             return TaskEngine.parseXctsk(trimmed);
         }
@@ -493,9 +535,19 @@ class TaskEngine {
         if (trimmed.startsWith('{')) {
             return TaskEngine.parseXctsk(trimmed);
         }
-        throw new Error('未対応のタスク形式です（.xctsk / .cup / JSON）');
+        throw new Error('未対応のタスク形式です（.xctsk / .cup / JSON）。JHF の .wpt はウェイポイント取込を使ってください');
     }
 }
+
+TaskEngine.CIVL = {
+    TAKEOFF: 400,
+    SSS: 2000,
+    TP: 400,
+    TP_MIN: 200,
+    ESS: 1000,
+    GOAL: 400,
+    ESS_GOAL_MIN: 500
+};
 
 if (typeof window !== 'undefined') {
     window.TaskEngine = TaskEngine;

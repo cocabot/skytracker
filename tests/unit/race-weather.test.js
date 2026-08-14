@@ -149,10 +149,17 @@ describe('WeatherService', () => {
         expect(parsed.aloft.cape).toBe(400);
         expect(parsed.aloft.lclM).toBeGreaterThan(1000);
         expect(parsed.aloft.levels.some((l) => l.alt > 1000)).toBeTruthy();
+        expect(parsed.aloft.hasPressureWinds).toBeTruthy();
         const flight = svc.windAtAltitude(parsed, 1500);
         expect(flight.speed).toBeGreaterThan(6);
         expect(WeatherService.flightWindAltitude(parsed, null)).toBeGreaterThan(700);
         const aloft = svc.windAtAltitude(parsed, 80);
         expect(aloft.speed).toBeGreaterThan(0);
+        svc.lastForecast = parsed;
+        expect(svc.getStatus().ok).toBeTruthy();
+        expect(svc.getStatus().hasPressureWinds).toBeTruthy();
+        const url = svc.buildForecastUrl(35.4, 138.6);
+        expect(url).toContain('wind_speed_850hPa');
+        expect(url).toContain('wind_speed_700hPa');
     });
 });

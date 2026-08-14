@@ -42,7 +42,7 @@ describe('TaskEngine', () => {
         expect(engine.state.phase).toBe('RACING');
     });
 
-    it('ターンポイント円筒進入でタグされる', () => {
+    it('CIVL 許容内なら円筒の外側でもタグされる', () => {
         engine.armStart();
         const sss = engine.task.turnpoints.find((tp) => tp.type === 'SSS');
         engine.updatePosition({ latitude: sss.lat, longitude: sss.lon, timestamp: new Date() });
@@ -51,8 +51,29 @@ describe('TaskEngine', () => {
 
         const tp = engine.task.turnpoints.find((t) => t.type === 'TURNPOINT');
         engine.state.nextIndex = engine.task.turnpoints.indexOf(tp);
-        engine.updatePosition({ latitude: tp.lat, longitude: tp.lon, timestamp: new Date() });
+        const justOutside = Geo.destination(tp.lat, tp.lon, 90, tp.radius + 3);
+        engine.updatePosition({ latitude: justOutside.lat, longitude: justOutside.lon, timestamp: new Date() });
         expect(engine.state.tagged[engine.task.turnpoints.indexOf(tp)]).toBeTruthy();
+        expect(TaskEngine.tagToleranceM(400)).toBe(5);
+    });
+
+    it('許容を超えるとタグされない', () => {
+        engine.armStart();
+        const sss = engine.task.turnpoints.find((tp) => tp.type === 'SSS');
+        engine.updatePosition({ latitude: sss.lat, longitude: sss.lon, timestamp: new Date() });
+        const out = Geo.destination(sss.lat, sss.lon, 0, sss.radius + 50);
+        engine.updatePosition({ latitude: out.lat, longitude: out.lon, timestamp: new Date() });
+
+        const tp = engine.task.turnpoints.find((t) => t.type === 'TURNPOINT');
+        engine.state.nextIndex = engine.task.turnpoints.indexOf(tp);
+        const far = Geo.destination(tp.lat, tp.lon, 90, tp.radius + 20);
+        engine.updatePosition({ latitude: far.lat, longitude: far.lon, timestamp: new Date() });
+        expect(engine.state.tagged[engine.task.turnpoints.indexOf(tp)]).toBeFalsy();
+    });
+
+    it('最適化距離と中心距離を両方持つ', () => {
+        expect(engine.optimized.centerDistance).toBeGreaterThan(engine.optimized.totalDistance - 1);
+        expect(engine.optimized.centerDistanceKm).toBeGreaterThan(0);
     });
 
     it('残距離がゴールに近づくと減る', () => {

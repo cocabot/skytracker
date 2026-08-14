@@ -10,6 +10,8 @@ class WeatherService {
         this.lastGrid = null;
         this.model = options.model || 'best_match';
         this.fetchImpl = options.fetchImpl || (typeof fetch === 'function' ? fetch.bind(globalThis) : null);
+        this.lastError = null;
+        this.lastOkAt = null;
     }
 
     setModel(model) {
@@ -112,11 +114,18 @@ class WeatherService {
     }
 
     async fetchForecast(lat, lon) {
-        const key = this.cacheKey('forecast', { lat: lat.toFixed(3), lon: lon.toFixed(3) });
-        const data = await this.getCached(key, () => this.fetchJson(this.buildForecastUrl(lat, lon)));
-        const snapshot = this.interpret(data, lat, lon);
-        this.lastForecast = snapshot;
-        return snapshot;
+        try {
+            const key = this.cacheKey('forecast', { lat: lat.toFixed(3), lon: lon.toFixed(3) });
+            const data = await this.getCached(key, () => this.fetchJson(this.buildForecastUrl(lat, lon)));
+            const snapshot = this.interpret(data, lat, lon);
+            this.lastForecast = snapshot;
+            this.lastError = null;
+            this.lastOkAt = Date.now();
+            return snapshot;
+        } catch (error) {
+            this.lastError = error;
+            throw error;
+        }
     }
 
     interpret(data, lat, lon) {
@@ -132,10 +141,15 @@ class WeatherService {
             gusts: Number(current.wind_gusts_10m ?? hour.wind_gusts_10m ?? 0)
         };
 
+        const hourTime = hourly.time && hourly.time[idx] != null
+            ? this.parseApiTime(hourly.time[idx])
+            : now.getTime();
+
         return {
             lat,
             lon,
             fetchedAt: now.toISOString(),
+            hourTime,
             timezone: data.timezone || 'auto',
             model: this.model,
             current: {
@@ -229,7 +243,33 @@ class WeatherService {
             cloudMid: Number(hour.cloud_cover_mid ?? 0),
             precipitation: Number(hour.precipitation ?? 0),
             lclM,
-            cloudbaseM: lclM
+            cloudbaseM: lclM,
+            hasPressureWinds: levels.some((l) => l.band === 'flight' && l.hPa)
+        };
+    }
+
+    getStatus() {
+        if (this.lastError) {
+            return {
+                ok: false,
+                message: '気象未取得',
+                detail: this.lastError.message || String(this.lastError)
+            };
+        }
+        const snap = this.lastForecast;
+        if (!snap) {
+            return { ok: false, message: '気象未取得', detail: 'まだ取得していません' };
+        }
+        const hour = snap.hourTime
+            ? new Date(snap.hourTime).toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })
+            : '--:--';
+        const model = snap.model === 'best_match' ? 'Open-Meteo' : snap.model;
+        const pressure = snap.aloft && snap.aloft.hasPressureWinds;
+        return {
+            ok: true,
+            message: pressure ? `${model} ${hour}` : `${model} ${hour}（気圧面なし・接地風）`,
+            snapshot: snap,
+            hasPressureWinds: !!pressure
         };
     }
 

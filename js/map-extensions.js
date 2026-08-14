@@ -20,33 +20,7 @@ class MapExtensions {
     }
 
     setupAdditionalLayers() {
-        // 航空図レイヤーの追加
-        this.mapManager.layers.aeronautical = {
-            name: '航空図',
-            layer: L.tileLayer('https://tiles.openaip.net/api/data/openaip/{z}/{x}/{y}.png?apiKey=demo', {
-                attribution: '© OpenAIP',
-                maxZoom: 14,
-                opacity: 0.7
-            })
-        };
-
-        // 地形図レイヤーの強化
-        this.mapManager.layers.terrain_detailed = {
-            name: '詳細地形図',
-            layer: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-                attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap',
-                maxZoom: 17
-            })
-        };
-
-        // 衛星画像の高解像度版
-        this.mapManager.layers.satellite_hd = {
-            name: '高解像度衛星画像',
-            layer: L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-                attribution: 'Tiles © Esri — Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
-                maxZoom: 19
-            })
-        };
+        // 地形・地理院・衛星は MapManager 側。ここでは追加しない。
     }
 
     createMapControls() {
@@ -70,12 +44,11 @@ class MapExtensions {
             </div>
             <div class="layer-selector">
                 <select id="layerSelect" class="layer-select">
-                    <option value="osm">標準地図</option>
+                    <option value="topo" selected>地形（等高線）</option>
+                    <option value="gsi">地理院</option>
+                    <option value="relief">陰影地形</option>
+                    <option value="osm">OpenStreetMap</option>
                     <option value="satellite">衛星画像</option>
-                    <option value="satellite_hd">高解像度衛星</option>
-                    <option value="terrain">地形図</option>
-                    <option value="terrain_detailed">詳細地形図</option>
-                    <option value="aeronautical">航空図</option>
                 </select>
             </div>
         `;
@@ -241,39 +214,14 @@ class MapExtensions {
     }
 
     setupWeatherSystem() {
-        // 模擬気象データ（実際の実装では気象APIを使用）
-        this.weatherData = {
-            wind: {
-                speed: 15, // km/h
-                direction: 270, // 度
-                gusts: 25
-            },
-            temperature: 22, // 摂氏
-            humidity: 65, // %
-            pressure: 1013, // hPa
-            visibility: 10, // km
-            cloudCover: 30, // %
-            thermalStrength: 'moderate'
-        };
-
-        // 定期的な気象データ更新（実際の実装では外部APIから取得）
+        this.weatherData = null;
         setInterval(() => {
             this.updateWeatherData();
-        }, 300000); // 5分ごと
+        }, 300000);
     }
 
     updateWeatherData() {
-        // 模擬的な気象データ更新
-        this.weatherData.wind.speed += (Math.random() - 0.5) * 5;
-        this.weatherData.wind.direction += (Math.random() - 0.5) * 20;
-        this.weatherData.temperature += (Math.random() - 0.5) * 2;
-        
-        // 範囲制限
-        this.weatherData.wind.speed = Math.max(0, Math.min(50, this.weatherData.wind.speed));
-        this.weatherData.wind.direction = (this.weatherData.wind.direction + 360) % 360;
-        this.weatherData.temperature = Math.max(-10, Math.min(40, this.weatherData.temperature));
-
-        // 気象レイヤーが表示されている場合は更新
+        this.syncWeatherFromRace();
         if (this.weatherLayer) {
             this.updateWeatherDisplay();
         }
@@ -289,6 +237,12 @@ class MapExtensions {
             button.classList.remove('active');
         } else {
             this.syncWeatherFromRace();
+            if (!this.weatherData) {
+                if (window.skyTracker && window.skyTracker.showNotification) {
+                    window.skyTracker.showNotification('気象未取得。レースパネルで「気象・サーマルを更新」してください。', 'warning');
+                }
+                return;
+            }
             this.showWeatherOverlay();
             this.weatherLayer = true;
             button.classList.add('active');
@@ -296,21 +250,32 @@ class MapExtensions {
     }
 
     syncWeatherFromRace() {
-        const snapshot = window.skyTracker && window.skyTracker.raceUI && window.skyTracker.raceUI.snapshot;
-        if (!snapshot || !snapshot.current) return;
+        const race = window.skyTracker && window.skyTracker.raceUI;
+        const snapshot = race && race.snapshot;
+        if (!snapshot || !snapshot.current) {
+            this.weatherData = null;
+            return;
+        }
         const c = snapshot.current;
+        const alt = WeatherService.flightWindAltitude(snapshot, window.skyTracker.lastPosition && window.skyTracker.lastPosition.altitude);
+        const fused = race.wind && race.wind.getFused(alt);
+        const wind = fused && fused.source !== 'none' ? fused : c.wind;
         this.weatherData = {
             wind: {
-                speed: WeatherService ? WeatherService.msToKmh(c.wind.speed) : c.wind.speed * 3.6,
-                direction: c.wind.from,
-                gusts: WeatherService ? WeatherService.msToKmh(c.wind.gusts) : c.wind.gusts * 3.6
+                speed: WeatherService ? WeatherService.msToKmh(wind.speed) : wind.speed * 3.6,
+                direction: wind.from,
+                gusts: WeatherService ? WeatherService.msToKmh(c.wind.gusts) : c.wind.gusts * 3.6,
+                altitude: Math.round(wind.altitude || alt),
+                source: (fused && fused.source) || 'model'
             },
             temperature: c.temperature,
             humidity: c.humidity,
             pressure: c.pressure,
             visibility: 10,
             cloudCover: c.cloudCover,
-            thermalStrength: (window.skyTracker.raceUI.prediction && window.skyTracker.raceUI.prediction.meteo.trigger) || 'unknown'
+            thermalStrength: (race.prediction && race.prediction.meteo.trigger) || 'unknown',
+            fetchedAt: snapshot.fetchedAt,
+            hasPressureWinds: !!(snapshot.aloft && snapshot.aloft.hasPressureWinds)
         };
     }
 
@@ -358,9 +323,13 @@ class MapExtensions {
     }
 
     updateWeatherDisplay() {
-        document.getElementById('wind-speed').textContent = `${this.weatherData.wind.speed.toFixed(1)} km/h`;
+        if (!this.weatherData) return;
+        const speedEl = document.getElementById('wind-speed');
+        if (!speedEl) return;
+        const src = this.weatherData.hasPressureWinds ? '気圧面' : '接地';
+        speedEl.textContent = `${this.weatherData.wind.speed.toFixed(0)} km/h @${this.weatherData.wind.altitude || '--'}m (${src})`;
         document.getElementById('wind-direction').textContent = `${this.weatherData.wind.direction.toFixed(0)}°`;
-        document.getElementById('wind-gusts').textContent = `${this.weatherData.wind.gusts.toFixed(1)} km/h`;
+        document.getElementById('wind-gusts').textContent = `${this.weatherData.wind.gusts.toFixed(0)} km/h`;
         document.getElementById('temperature').textContent = `${this.weatherData.temperature.toFixed(1)}°C`;
         document.getElementById('humidity').textContent = `${this.weatherData.humidity}%`;
         document.getElementById('pressure').textContent = `${this.weatherData.pressure} hPa`;
@@ -557,29 +526,9 @@ class MapExtensions {
     }
 
     toggleTerrainLayer() {
+        this.switchToLayer('relief');
         const button = document.getElementById('terrainToggle');
-        
-        if (this.terrainLayer) {
-            // 地形レイヤーを非表示
-            this.mapManager.map.removeLayer(this.terrainLayer);
-            this.terrainLayer = null;
-            button.classList.remove('active');
-        } else {
-            // 地形レイヤーを表示
-            this.showTerrainLayer();
-            button.classList.add('active');
-        }
-    }
-
-    showTerrainLayer() {
-        // 等高線レイヤーを追加
-        this.terrainLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-            attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap',
-            opacity: 0.6,
-            maxZoom: 17
-        });
-
-        this.terrainLayer.addTo(this.mapManager.map);
+        if (button) button.classList.add('active');
     }
 
     toggle3DMode() {

@@ -2,7 +2,7 @@
 class MapManager {
     constructor(mapId) {
         this.mapId = mapId;
-        this.currentLayer = 'osm';
+        this.currentLayer = 'topo';
         this.trackPolyline = null;
         this.currentPositionMarker = null;
         this.groupMarkers = new Map();
@@ -60,8 +60,34 @@ class MapManager {
     }
 
     setupLayers() {
-        // 利用可能な地図レイヤー
+        const gsiStd = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
+            attribution: '© 国土地理院',
+            maxZoom: 18
+        });
+        const gsiRelief = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/relief/{z}/{x}/{y}.png', {
+            attribution: '© 国土地理院',
+            maxZoom: 15,
+            opacity: 0.55
+        });
         this.layers = {
+            topo: {
+                name: '地形（等高線）',
+                layer: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                    attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap',
+                    maxZoom: 17
+                })
+            },
+            gsi: {
+                name: '地理院',
+                layer: L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/std/{z}/{x}/{y}.png', {
+                    attribution: '© 国土地理院',
+                    maxZoom: 18
+                })
+            },
+            relief: {
+                name: '陰影地形',
+                layer: L.layerGroup([gsiStd, gsiRelief])
+            },
             osm: {
                 name: 'OpenStreetMap',
                 layer: L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -75,13 +101,6 @@ class MapManager {
                     attribution: 'Tiles © Esri',
                     maxZoom: 19
                 })
-            },
-            terrain: {
-                name: '地形図',
-                layer: L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
-                    attribution: 'Map data: © OpenStreetMap contributors, SRTM | Map style: © OpenTopoMap',
-                    maxZoom: 17
-                })
             }
         };
 
@@ -89,10 +108,10 @@ class MapManager {
     }
 
     addDefaultLayer() {
-        if (this.layers && this.layers.osm) {
-            this.currentLayerObj = this.layers.osm.layer;
-            this.currentLayerObj.addTo(this.map);
-        }
+        const key = this.layers[this.currentLayer] ? this.currentLayer : 'topo';
+        this.currentLayer = key;
+        this.currentLayerObj = this.layers[key].layer;
+        this.currentLayerObj.addTo(this.map);
     }
 
     toggleLayer() {

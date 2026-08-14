@@ -1,6 +1,6 @@
 // Service Worker for SkyTracker
 // GitHub Pages（/skytracker/）でも Netlify ルートでも動くよう、スコープ相対でキャッシュする
-const CACHE_NAME = 'skytracker-v4';
+const CACHE_NAME = 'skytracker-v5';
 const SCOPE = self.registration.scope;
 const APP_FILES = [
     './',
@@ -15,6 +15,7 @@ const APP_FILES = [
     './js/task-engine.js',
     './js/sample-tasks.js',
     './js/waypoints.js',
+    './data/sample-waypoints.wpt',
     './js/openair.js',
     './js/qr-import.js',
     './js/weather-service.js',

@@ -75,6 +75,18 @@ class RaceUI {
             document.querySelector('.map-container').appendChild(hud);
         }
 
+        if (!document.getElementById('wxLegend')) {
+            const legend = document.createElement('div');
+            legend.id = 'wxLegend';
+            legend.className = 'wx-legend';
+            legend.innerHTML = `
+                <div class="wx-legend-row"><span class="wx-k">風</span><span id="wxLegendWind">未取得</span></div>
+                <div class="wx-legend-row"><span class="wx-k wx-thermal">▲</span><span id="wxLegendThermal">予測サーマル（モデル+地形）</span></div>
+                <p class="wx-legend-note">矢印＝Open-Meteo気圧面の実データ　緑●＝GPS実測　▲＝予報</p>
+            `;
+            document.querySelector('.map-container').appendChild(legend);
+        }
+
         if (!document.getElementById('racePanel')) {
             const panel = document.createElement('div');
             panel.id = 'racePanel';
@@ -104,12 +116,13 @@ class RaceUI {
                         <textarea id="qrPasteInput" class="race-paste" rows="2" placeholder="QRの文字・XCTSK JSON を貼り付け"></textarea>
                     </div>
                     <div class="setting-group">
-                        <label>ウェイポイント</label>
+                        <label>ウェイポイント（JHF .wpt 主形式）</label>
+                        <p class="race-opt-dist">JHF競技委員会の公式WPは GpsDump $FormatGEO の .wpt。CIVL S7：SSS EXIT 2km / TP 400m / ESS→GOAL（500m）。NG・SLはタスクから除外。</p>
                         <div class="race-panel-actions">
-                            <button class="btn btn-secondary" id="importWpBtn" type="button">CUP / GPX</button>
-                            <button class="btn btn-secondary" id="loadSampleWpBtn" type="button">サンプル</button>
-                            <button class="btn btn-primary" id="wpToTaskBtn" type="button">選択からタスク</button>
-                            <input type="file" id="wpFileInput" accept=".cup,.gpx,.xml,text/plain" hidden>
+                            <button class="btn btn-primary" id="importWpBtn" type="button">WPT / CUP / GPX</button>
+                            <button class="btn btn-secondary" id="loadSampleWpBtn" type="button">西富士サンプル</button>
+                            <button class="btn btn-secondary" id="wpToTaskBtn" type="button">選択からタスク</button>
+                            <input type="file" id="wpFileInput" accept=".wpt,.cup,.gpx,.xml,text/plain" hidden>
                         </div>
                         <div id="wpLibraryList" class="wp-library-list"></div>
                     </div>
@@ -325,6 +338,10 @@ class RaceUI {
                 return;
             }
             const text = await file.text();
+            if (/\.wpt$/i.test(file.name) || /\$FormatGEO/i.test(text.slice(0, 80)) || /OziExplorer\s+Waypoint/i.test(text.slice(0, 120))) {
+                await this.importWaypointText(text, file.name);
+                return;
+            }
             const parsed = TaskEngine.parseAuto(text, file.name);
             this.applyTask(parsed);
             this.app.showNotification(`${parsed.name} を読み込みました。`, 'success');
@@ -406,26 +423,31 @@ class RaceUI {
     async importWaypointFile(file) {
         try {
             const text = await file.text();
-            const list = WaypointLibrary.parseAuto(text, file.name);
-            this.waypoints.addMany(list);
-            this.renderWaypoints();
-            this.updateWaypointList();
-            this.app.showNotification(`${list.length} 件のウェイポイントを取り込みました。`, 'success');
+            await this.importWaypointText(text, file.name);
         } catch (error) {
             console.error(error);
             this.app.showNotification(error.message || 'ウェイポイントの読み込みに失敗しました。', 'error');
         }
     }
 
+    async importWaypointText(text, filename = '') {
+        const list = WaypointLibrary.parseAuto(text, filename);
+        this.waypoints.addMany(list);
+        this.renderWaypoints();
+        this.updateWaypointList();
+        this.app.showNotification(`${list.length} 件のウェイポイントを取り込みました（${filename || 'WPT'}）。`, 'success');
+        return list;
+    }
+
     async loadSampleWaypoints() {
         try {
-            const res = await fetch('data/sample-waypoints.cup');
+            const res = await fetch('data/sample-waypoints.wpt');
             const text = await res.text();
-            const list = WaypointLibrary.parseCup(text);
+            const list = WaypointLibrary.parseAuto(text, 'sample-waypoints.wpt');
             this.waypoints.addMany(list);
             this.renderWaypoints();
             this.updateWaypointList();
-            this.app.showNotification('サンプルウェイポイントを読み込みました。', 'success');
+            this.app.showNotification(`JHF西富士形式のサンプル ${list.length} 点を読み込みました。`, 'success');
         } catch (error) {
             this.app.showNotification('サンプルウェイポイントを取得できませんでした。', 'error');
         }
@@ -453,13 +475,14 @@ class RaceUI {
         const el = document.getElementById('wpLibraryList');
         if (!el) return;
         if (!this.waypoints.waypoints.length) {
-            el.innerHTML = '<p class="race-opt-dist">CUP / GPX を取り込むか、サンプルを読み込んでください。</p>';
+            el.innerHTML = '<p class="race-opt-dist">JHF の .wpt（または CUP / GPX）を取り込むか、西富士サンプルを読み込んでください。</p>';
             return;
         }
         el.innerHTML = this.waypoints.waypoints.map((wp, i) => {
             const on = this.waypoints.selected.has(i);
-            return `<button type="button" class="wp-chip ${on ? 'selected' : ''}" data-wp-index="${i}">
-                ${wp.name}
+            const role = wp.role || WaypointLibrary.classifyRole(wp);
+            return `<button type="button" class="wp-chip ${on ? 'selected' : ''} role-${role}" data-wp-index="${i}">
+                ${wp.name}<small>${role}</small>
             </button>`;
         }).join('');
         el.querySelectorAll('[data-wp-index]').forEach((btn) => {
@@ -645,6 +668,7 @@ class RaceUI {
             this.showHud(true);
             document.getElementById('raceHudNext').textContent = this.taskEngine.task.name;
         }
+        if (this.snapshot) this.updateWxLegend();
     }
 
     planningPosition() {
@@ -711,12 +735,13 @@ class RaceUI {
             if (el) el.innerHTML = '';
             return;
         }
-        const optKm = this.taskEngine.optimized
-            ? this.taskEngine.optimized.totalDistanceKm.toFixed(2)
-            : '--';
+        const opt = this.taskEngine.optimized;
+        const optKm = opt ? opt.totalDistanceKm.toFixed(2) : '--';
+        const taskKm = opt && opt.centerDistanceKm != null ? opt.centerDistanceKm.toFixed(2) : '--';
+        const rules = this.taskEngine.task.rules || 'CIVL S7 / JHF';
         el.innerHTML = `
             <h4>${this.taskEngine.task.name}</h4>
-            <p class="race-opt-dist">最適化距離 ${optKm} km</p>
+            <p class="race-opt-dist">${rules}<br>タスク距離（中心） ${taskKm} km　／　最適化（円筒縁） ${optKm} km</p>
             <ol class="race-tp-ol">
                 ${this.taskEngine.task.turnpoints.map((tp, i) => {
                     const tagged = this.taskEngine.state.tagged[i];
@@ -882,12 +907,14 @@ class RaceUI {
             const live = this.thermals.extractLiveThermals(this.app.trackData || []);
             this.prediction = this.thermals.predict(snapshot, grid, live);
             this.renderWeatherCard();
+            this.updateWxLegend();
             this.renderOverlays();
             this.refreshInstruments();
         } catch (error) {
             console.warn('Weather refresh failed', error);
             this.app.showNotification('気象データの取得に失敗しました。オフラインかモデル制限の可能性があります。', 'warning');
             this.renderWeatherCard(error);
+            this.updateWxLegend(error);
         } finally {
             if (btn) btn.disabled = false;
         }
@@ -898,7 +925,8 @@ class RaceUI {
         const aloftEl = document.getElementById('raceAloft');
         if (!body) return;
         if (error) {
-            body.textContent = error.message || '気象を取得できませんでした。';
+            body.textContent = '気象未取得：' + (error.message || '気象を取得できませんでした。');
+            this.updateWxLegend(error);
             return;
         }
         if (!this.snapshot) return;
@@ -909,23 +937,52 @@ class RaceUI {
             WeatherService.flightWindAltitude(this.snapshot, this.app.lastPosition && this.app.lastPosition.altitude)
         );
         const lcl = a.lclM != null ? `${a.lclM.toFixed(0)} m` : '--';
+        const status = this.weather.getStatus();
+        const src = fused.source === 'gps' ? 'GPS旋回' : (fused.source === 'fused' ? 'モデル+GPS' : 'Open-Meteo気圧面');
+        const liveCount = (this.prediction && this.prediction.liveThermals && this.prediction.liveThermals.length) || 0;
         body.innerHTML = `
-            <div class="weather-item"><span>観測風 10m</span><span>${Geo.cardinal(c.wind.from)} ${WeatherService.msToKmh(c.wind.speed).toFixed(0)} km/h ガスト ${WeatherService.msToKmh(c.wind.gusts).toFixed(0)}</span></div>
-            <div class="weather-item"><span>飛行高度の風</span><span>${Geo.cardinal(fused.from)} ${WeatherService.msToKmh(fused.speed).toFixed(0)} km/h @ ${Math.round(fused.altitude || 0)} m (${fused.source})</span></div>
+            <div class="weather-item"><span>データ</span><span>${status.message}${a.hasPressureWinds ? ' · 気圧面OK' : ' · 気圧面なし'}</span></div>
+            <div class="weather-item"><span>接地風 10m</span><span>${Geo.cardinal(c.wind.from)} ${WeatherService.msToKmh(c.wind.speed).toFixed(0)} km/h ガスト ${WeatherService.msToKmh(c.wind.gusts).toFixed(0)}</span></div>
+            <div class="weather-item"><span>飛行高度の風</span><span>${Geo.cardinal(fused.from)} ${WeatherService.msToKmh(fused.speed).toFixed(0)} km/h @ ${Math.round(fused.altitude || 0)} m（${src}）</span></div>
             <div class="weather-item"><span>気温 / 雲量</span><span>${c.temperature.toFixed(0)}°C / ${c.cloudCover.toFixed(0)}% ${this.weather.weatherCodeLabel(c.weatherCode)}</span></div>
             <div class="weather-item"><span>CAPE / LI</span><span>${a.cape.toFixed(0)} J/kg / ${a.liftedIndex == null ? '--' : a.liftedIndex.toFixed(1)}</span></div>
             <div class="weather-item"><span>混合層 / 雲底(LCL)</span><span>${a.blh.toFixed(0)} m / ${lcl}</span></div>
             <div class="weather-item"><span>日射</span><span>${a.shortwave.toFixed(0)} W/m²</span></div>
-            <div class="weather-item"><span>サーマル見込み</span><span>${meteo ? `${meteo.trigger} / ${meteo.climbMs.toFixed(1)} m/s / 天井 ${meteo.maxAlt.toFixed(0)} m` : '--'}</span></div>
+            <div class="weather-item"><span>サーマル</span><span>${meteo ? `予測 ${meteo.trigger} / ${meteo.climbMs.toFixed(1)} m/s / 天井 ${meteo.maxAlt.toFixed(0)} m` : '--'}　実測 ${liveCount} 個</span></div>
         `;
         if (aloftEl) {
             const flightLevels = (a.levels || []).filter((l) => l.band === 'flight' || l.alt >= 700);
             const surface = (a.levels || []).filter((l) => l.band === 'surface' || l.alt <= 80);
             const shown = [...surface.slice(0, 1), ...flightLevels];
-            aloftEl.innerHTML = `<h4>高度別の風（飛行帯）</h4>` + shown.map((l) =>
+            aloftEl.innerHTML = `<h4>高度別の風（Open-Meteo ${a.hasPressureWinds ? '気圧面あり' : '接地のみ'}）</h4>` + shown.map((l) =>
                 `<div class="weather-item"><span>${l.label || `${l.alt} m`}</span><span>${Geo.cardinal(l.from)} ${WeatherService.msToKmh(l.speed).toFixed(0)} km/h · ${l.alt} m</span></div>`
             ).join('');
         }
+        this.updateWxLegend();
+    }
+
+    updateWxLegend(error) {
+        const windEl = document.getElementById('wxLegendWind');
+        const thEl = document.getElementById('wxLegendThermal');
+        if (!windEl || !thEl) return;
+        if (error || !this.snapshot) {
+            windEl.textContent = '気象未取得';
+            thEl.textContent = '予測サーマル（未計算）';
+            return;
+        }
+        const alt = WeatherService.flightWindAltitude(this.snapshot, this.app.lastPosition && this.app.lastPosition.altitude);
+        const fused = this.wind.getFused(alt);
+        const status = this.weather.getStatus();
+        const src = fused.source === 'none' ? 'なし'
+            : fused.source === 'gps' ? 'GPS旋回'
+            : fused.source === 'fused' ? 'モデル+GPS'
+            : '気圧面';
+        windEl.textContent = `${Geo.cardinal(fused.from)} ${WeatherService.msToKmh(fused.speed).toFixed(0)} km/h @${Math.round(fused.altitude || alt)}m（${src} / ${status.message}）`;
+        const meteo = this.prediction && this.prediction.meteo;
+        const live = (this.prediction && this.prediction.liveThermals) || [];
+        thEl.textContent = meteo
+            ? `予測 ${meteo.climbMs.toFixed(1)} m/s ${meteo.trigger}　実測 ${live.length} 個`
+            : '予測サーマル（モデル+地形）';
     }
 
     renderOverlays() {
@@ -947,20 +1004,24 @@ class RaceUI {
         const bounds = this.mapManager.map.getBounds();
         const sw = bounds.getSouthWest();
         const ne = bounds.getNorthEast();
-        const rows = 4;
-        const cols = 4;
+        const kmh = WeatherService.msToKmh(wind.speed).toFixed(0);
+        const alt = Math.round(wind.altitude || 0);
+        const src = wind.source === 'gps' ? 'GPS' : (wind.source === 'fused' ? '融合' : '予報');
+        const rows = 3;
+        const cols = 3;
         for (let r = 1; r < rows; r++) {
             for (let c = 1; c < cols; c++) {
                 const lat = sw.lat + (ne.lat - sw.lat) * (r / rows);
                 const lng = sw.lng + (ne.lng - sw.lng) * (c / cols);
+                const showLabel = r === 1 && c === 1;
                 const icon = L.divIcon({
                     className: 'wind-vector',
                     html: `<div class="wind-vector-inner" style="transform:rotate(${wind.to}deg)">
                         <span class="wind-shaft"></span>
                     </div>
-                    <small>${WeatherService.msToKmh(wind.speed).toFixed(0)}</small>`,
-                    iconSize: [36, 36],
-                    iconAnchor: [18, 18]
+                    <small>${kmh}${showLabel ? ` @${alt}m ${src}` : ''}</small>`,
+                    iconSize: [88, 52],
+                    iconAnchor: [44, 26]
                 });
                 L.marker([lat, lng], { icon, interactive: false }).addTo(this.layers.wind);
             }
@@ -971,7 +1032,9 @@ class RaceUI {
         this.layers.thermals.clearLayers();
         if (!this.overlays.thermals || !this.prediction) return;
         this.prediction.sources.forEach((s) => {
-            const color = s.kind === 'live' ? '#16a34a' : this.thermalColor(s.climbMs);
+            const live = s.kind === 'live' || s.source === 'gps' || s.source === 'track';
+            const color = live ? '#16a34a' : this.thermalColor(s.climbMs);
+            const label = live ? '実測' : '予測';
             L.circle([s.lat, s.lon], {
                 radius: 220 + s.climbMs * 80,
                 color,
@@ -979,10 +1042,10 @@ class RaceUI {
                 fillColor: color,
                 fillOpacity: 0.18 + Math.min(0.25, s.strength * 0.25)
             }).bindPopup(`
-                <strong>${s.kind === 'live' ? '実測' : '予測'}サーマル</strong><br>
+                <strong>${label}サーマル</strong><br>
                 上昇 ${s.climbMs.toFixed(1)} m/s<br>
                 天井 約 ${s.maxAlt.toFixed(0)} m<br>
-                ${s.kind}
+                ${live ? 'GPSトラックの上昇・旋回' : 'Open-Meteo対流 + 地形（尾根・南斜面）'}
             `).addTo(this.layers.thermals);
 
             if (s.driftLat && (s.driftLat !== s.lat || s.driftLon !== s.lon)) {
@@ -997,9 +1060,9 @@ class RaceUI {
             L.marker([s.lat, s.lon], {
                 icon: L.divIcon({
                     className: 'thermal-label',
-                    html: `<div class="thermal-chip">${s.climbMs.toFixed(1)}</div>`,
-                    iconSize: [36, 20],
-                    iconAnchor: [18, 10]
+                    html: `<div class="thermal-chip ${live ? 'live' : 'forecast'}">▲ ${s.climbMs.toFixed(1)} ${label}</div>`,
+                    iconSize: [92, 24],
+                    iconAnchor: [46, 12]
                 })
             }).addTo(this.layers.thermals);
         });
