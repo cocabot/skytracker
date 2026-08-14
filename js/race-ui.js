@@ -8,12 +8,17 @@ class RaceUI {
         this.thermals = new ThermalPredictor();
         this.wind = new WindEstimator();
         this.computer = new RaceComputer(this.taskEngine, this.wind);
+        this.waypoints = new WaypointLibrary();
+        this.airspace = [];
+        this.qrScanner = null;
         this.overlays = {
             wind: true,
             thermals: true,
             streets: true,
             route: true,
-            follow: false
+            follow: false,
+            waypoints: true,
+            airspace: true
         };
         this.layers = {};
         this.snapshot = null;
@@ -92,8 +97,40 @@ class RaceUI {
                         <div class="race-panel-actions">
                             <button class="btn btn-primary" id="loadSampleTaskBtn" type="button">読込</button>
                             <button class="btn btn-secondary" id="importTaskBtn" type="button">CUP / XCTSK</button>
-                            <input type="file" id="taskFileInput" accept=".cup,.xctsk,.json,application/json" hidden>
+                            <button class="btn btn-secondary" id="importQrBtn" type="button">QR</button>
+                            <input type="file" id="taskFileInput" accept=".cup,.xctsk,.json,application/json,image/*" hidden>
+                            <input type="file" id="qrImageInput" accept="image/*" hidden>
                         </div>
+                        <textarea id="qrPasteInput" class="race-paste" rows="2" placeholder="QRの文字・XCTSK JSON を貼り付け"></textarea>
+                    </div>
+                    <div class="setting-group">
+                        <label>ウェイポイント</label>
+                        <div class="race-panel-actions">
+                            <button class="btn btn-secondary" id="importWpBtn" type="button">CUP / GPX</button>
+                            <button class="btn btn-secondary" id="loadSampleWpBtn" type="button">サンプル</button>
+                            <button class="btn btn-primary" id="wpToTaskBtn" type="button">選択からタスク</button>
+                            <input type="file" id="wpFileInput" accept=".cup,.gpx,.xml,text/plain" hidden>
+                        </div>
+                        <div id="wpLibraryList" class="wp-library-list"></div>
+                    </div>
+                    <div class="setting-group">
+                        <label>空域（OpenAir）</label>
+                        <div class="race-panel-actions">
+                            <button class="btn btn-secondary" id="importAirspaceBtn" type="button">ファイル</button>
+                            <button class="btn btn-secondary" id="loadSampleAirspaceBtn" type="button">サンプル</button>
+                            <button class="btn btn-secondary" id="clearAirspaceBtn" type="button">消去</button>
+                            <input type="file" id="airspaceFileInput" accept=".txt,.openair,.airspace,text/plain" hidden>
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <label>機体（ポーラ）</label>
+                        <select id="gliderClassSelect">
+                            <option value="pg_enb">パラ EN-B</option>
+                            <option value="pg_enc">パラ EN-C</option>
+                            <option value="pg_ccc">パラ CCC</option>
+                            <option value="hg_sport">ハング スポーツ</option>
+                            <option value="hg_comp">ハング コンペ</option>
+                        </select>
                     </div>
                     <div class="setting-group">
                         <label>レース制御</label>
@@ -125,6 +162,8 @@ class RaceUI {
                         <label><input type="checkbox" id="toggleStreetOverlay" checked> クラウドストリート</label>
                         <label><input type="checkbox" id="toggleRouteOverlay" checked> 最適化ルート</label>
                         <label><input type="checkbox" id="toggleFollowRace"> 位置追従</label>
+                        <label><input type="checkbox" id="toggleWpOverlay" checked> ウェイポイント</label>
+                        <label><input type="checkbox" id="toggleAirspaceOverlay" checked> 空域</label>
                     </div>
                     <div id="raceWeatherCard" class="race-weather-card">
                         <h4>気象・対流</h4>
@@ -135,6 +174,21 @@ class RaceUI {
                 </div>
             `;
             document.body.appendChild(panel);
+        }
+
+        if (!document.getElementById('qrOverlay')) {
+            const qr = document.createElement('div');
+            qr.id = 'qrOverlay';
+            qr.className = 'qr-overlay hidden';
+            qr.innerHTML = `
+                <video id="qrVideo" playsinline muted></video>
+                <canvas id="qrCanvas" hidden></canvas>
+                <div class="qr-toolbar">
+                    <p>XCTrack のタスクQRを枠に入れてください</p>
+                    <button class="btn btn-secondary" id="qrCloseBtn" type="button">閉じる</button>
+                </div>
+            `;
+            document.body.appendChild(qr);
         }
     }
 
@@ -153,6 +207,47 @@ class RaceUI {
             const file = e.target.files && e.target.files[0];
             if (file) this.importTaskFile(file);
             e.target.value = '';
+        });
+        document.getElementById('importQrBtn')?.addEventListener('click', () => this.startQrScan());
+        document.getElementById('qrCloseBtn')?.addEventListener('click', () => this.stopQrScan());
+        document.getElementById('qrImageInput')?.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) this.importQrImage(file);
+            e.target.value = '';
+        });
+        document.getElementById('qrPasteInput')?.addEventListener('paste', (e) => {
+            setTimeout(() => {
+                const text = e.target.value;
+                if (text && text.trim()) this.importQrText(text);
+            }, 0);
+        });
+        document.getElementById('importWpBtn')?.addEventListener('click', () => {
+            document.getElementById('wpFileInput').click();
+        });
+        document.getElementById('wpFileInput')?.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) this.importWaypointFile(file);
+            e.target.value = '';
+        });
+        document.getElementById('loadSampleWpBtn')?.addEventListener('click', () => this.loadSampleWaypoints());
+        document.getElementById('wpToTaskBtn')?.addEventListener('click', () => this.taskFromSelectedWaypoints());
+        document.getElementById('importAirspaceBtn')?.addEventListener('click', () => {
+            document.getElementById('airspaceFileInput').click();
+        });
+        document.getElementById('airspaceFileInput')?.addEventListener('change', (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (file) this.importAirspaceFile(file);
+            e.target.value = '';
+        });
+        document.getElementById('loadSampleAirspaceBtn')?.addEventListener('click', () => this.loadSampleAirspace());
+        document.getElementById('clearAirspaceBtn')?.addEventListener('click', () => {
+            this.airspace = [];
+            this.renderAirspace();
+            this.app.showNotification('空域を消去しました。', 'info');
+        });
+        document.getElementById('gliderClassSelect')?.addEventListener('change', (e) => {
+            this.computer.setGliderClass(e.target.value);
+            this.refreshInstruments();
         });
         document.getElementById('armRaceBtn')?.addEventListener('click', () => this.armRace());
         document.getElementById('resetRaceBtn')?.addEventListener('click', () => this.resetRace());
@@ -187,6 +282,14 @@ class RaceUI {
             this.overlays.follow = e.target.checked;
             if (this.mapManager) this.mapManager.followPosition = e.target.checked;
         });
+        document.getElementById('toggleWpOverlay')?.addEventListener('change', (e) => {
+            this.overlays.waypoints = e.target.checked;
+            this.renderWaypoints();
+        });
+        document.getElementById('toggleAirspaceOverlay')?.addEventListener('change', (e) => {
+            this.overlays.airspace = e.target.checked;
+            this.renderAirspace();
+        });
 
         this.mapManager.map.on('moveend', () => {
             this.scheduleWeatherRefresh();
@@ -202,6 +305,8 @@ class RaceUI {
         this.layers.wind = L.layerGroup().addTo(map);
         this.layers.live = L.layerGroup().addTo(map);
         this.layers.nav = L.layerGroup().addTo(map);
+        this.layers.waypoints = L.layerGroup().addTo(map);
+        this.layers.airspace = L.layerGroup().addTo(map);
     }
 
     loadSample(key) {
@@ -215,6 +320,10 @@ class RaceUI {
 
     async importTaskFile(file) {
         try {
+            if (file.type && file.type.startsWith('image/')) {
+                await this.importQrImage(file);
+                return;
+            }
             const text = await file.text();
             const parsed = TaskEngine.parseAuto(text, file.name);
             this.applyTask(parsed);
@@ -222,6 +331,235 @@ class RaceUI {
         } catch (error) {
             console.error(error);
             this.app.showNotification(error.message || 'タスクの読み込みに失敗しました。', 'error');
+        }
+    }
+
+    async importQrText(text) {
+        try {
+            const decoded = QRTaskImport.decodePayload(text);
+            const task = await this.resolveQrPayload(decoded);
+            this.applyTask(task);
+            this.app.showNotification(`${task.name} をQRから読み込みました。`, 'success');
+            const paste = document.getElementById('qrPasteInput');
+            if (paste) paste.value = '';
+        } catch (error) {
+            console.error(error);
+            this.app.showNotification(error.message || 'QRの読み取りに失敗しました。', 'error');
+        }
+    }
+
+    async importQrImage(file) {
+        try {
+            const decoded = await QRTaskImport.decodeImageFile(file);
+            const task = await this.resolveQrPayload(decoded);
+            this.applyTask(task);
+            this.app.showNotification(`${task.name} をQR画像から読み込みました。`, 'success');
+        } catch (error) {
+            console.error(error);
+            this.app.showNotification(error.message || 'QR画像を読めませんでした。', 'error');
+        }
+    }
+
+    async resolveQrPayload(decoded) {
+        if (!decoded) throw new Error('QRが空です');
+        if (decoded.kind === 'task') return decoded.task;
+        if (decoded.kind === 'url') {
+            const fetched = await QRTaskImport.fetchUrl(decoded.url);
+            if (fetched.kind === 'task') return fetched.task;
+        }
+        throw new Error('対応していないQRです');
+    }
+
+    async startQrScan() {
+        const overlay = document.getElementById('qrOverlay');
+        if (!overlay) {
+            document.getElementById('qrImageInput')?.click();
+            return;
+        }
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            this.app.showNotification('カメラが使えないので画像または貼り付けを使ってください。', 'warning');
+            document.getElementById('qrImageInput')?.click();
+            return;
+        }
+        try {
+            this.stopQrScan();
+            this.qrScanner = new QRScanner(overlay);
+            const decoded = await this.qrScanner.start();
+            const task = await this.resolveQrPayload(decoded);
+            this.applyTask(task);
+            this.app.showNotification(`${task.name} をQRから読み込みました。`, 'success');
+        } catch (error) {
+            if (error && error.message !== 'スキャンを中止しました') {
+                console.error(error);
+                this.app.showNotification(error.message || 'QRスキャンに失敗しました。', 'error');
+            }
+        }
+    }
+
+    stopQrScan() {
+        if (this.qrScanner) {
+            this.qrScanner.stop();
+            this.qrScanner = null;
+        }
+    }
+
+    async importWaypointFile(file) {
+        try {
+            const text = await file.text();
+            const list = WaypointLibrary.parseAuto(text, file.name);
+            this.waypoints.addMany(list);
+            this.renderWaypoints();
+            this.updateWaypointList();
+            this.app.showNotification(`${list.length} 件のウェイポイントを取り込みました。`, 'success');
+        } catch (error) {
+            console.error(error);
+            this.app.showNotification(error.message || 'ウェイポイントの読み込みに失敗しました。', 'error');
+        }
+    }
+
+    async loadSampleWaypoints() {
+        try {
+            const res = await fetch('data/sample-waypoints.cup');
+            const text = await res.text();
+            const list = WaypointLibrary.parseCup(text);
+            this.waypoints.addMany(list);
+            this.renderWaypoints();
+            this.updateWaypointList();
+            this.app.showNotification('サンプルウェイポイントを読み込みました。', 'success');
+        } catch (error) {
+            this.app.showNotification('サンプルウェイポイントを取得できませんでした。', 'error');
+        }
+    }
+
+    taskFromSelectedWaypoints() {
+        try {
+            const task = this.waypoints.toRaceTask();
+            this.applyTask(task);
+        } catch (error) {
+            this.app.showNotification(error.message || 'タスクを作れませんでした。', 'error');
+        }
+    }
+
+    gotoWaypoint(wp) {
+        if (!wp || !this.mapManager) return;
+        this.mapManager.map.setView([wp.lat, wp.lon], 13);
+        this.overlays.follow = false;
+        const follow = document.getElementById('toggleFollowRace');
+        if (follow) follow.checked = false;
+        if (this.mapManager) this.mapManager.followPosition = false;
+    }
+
+    updateWaypointList() {
+        const el = document.getElementById('wpLibraryList');
+        if (!el) return;
+        if (!this.waypoints.waypoints.length) {
+            el.innerHTML = '<p class="race-opt-dist">CUP / GPX を取り込むか、サンプルを読み込んでください。</p>';
+            return;
+        }
+        el.innerHTML = this.waypoints.waypoints.map((wp, i) => {
+            const on = this.waypoints.selected.has(i);
+            return `<button type="button" class="wp-chip ${on ? 'selected' : ''}" data-wp-index="${i}">
+                ${wp.name}
+            </button>`;
+        }).join('');
+        el.querySelectorAll('[data-wp-index]').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const idx = Number(btn.dataset.wpIndex);
+                this.waypoints.toggleSelected(idx);
+                this.updateWaypointList();
+                this.renderWaypoints();
+                const wp = this.waypoints.waypoints[idx];
+                if (wp) this.gotoWaypoint(wp);
+            });
+        });
+    }
+
+    renderWaypoints() {
+        if (!this.layers.waypoints) return;
+        this.layers.waypoints.clearLayers();
+        if (!this.overlays.waypoints) return;
+        this.waypoints.waypoints.forEach((wp, i) => {
+            const selected = this.waypoints.selected.has(i);
+            L.circleMarker([wp.lat, wp.lon], {
+                radius: selected ? 7 : 5,
+                color: selected ? '#f59e0b' : '#0f172a',
+                fillColor: selected ? '#fbbf24' : '#38bdf8',
+                fillOpacity: 0.9,
+                weight: 2
+            }).bindPopup(`<strong>${wp.name}</strong><br>${wp.altitude || 0} m`).addTo(this.layers.waypoints);
+        });
+    }
+
+    async importAirspaceFile(file) {
+        try {
+            const text = await file.text();
+            const zones = OpenAirParser.parse(text);
+            if (!zones.length) throw new Error('OpenAir 空域が見つかりません');
+            this.airspace = zones;
+            this.renderAirspace();
+            this.app.showNotification(`${zones.length} 件の空域を取り込みました。`, 'success');
+        } catch (error) {
+            console.error(error);
+            this.app.showNotification(error.message || '空域ファイルを読めませんでした。', 'error');
+        }
+    }
+
+    async loadSampleAirspace() {
+        try {
+            const res = await fetch('data/sample-airspace.txt');
+            const text = await res.text();
+            this.airspace = OpenAirParser.parse(text);
+            this.renderAirspace();
+            this.app.showNotification('サンプル空域を表示しました。', 'success');
+        } catch (error) {
+            this.app.showNotification('サンプル空域を取得できませんでした。', 'error');
+        }
+    }
+
+    renderAirspace() {
+        if (!this.layers.airspace) return;
+        this.layers.airspace.clearLayers();
+        if (!this.overlays.airspace) return;
+        this.airspace.forEach((zone) => {
+            const color = OpenAirParser.color(zone.type);
+            const popup = `<strong>${zone.name}</strong><br>AC ${zone.class}<br>${zone.floor.raw} – ${zone.ceiling.raw}<br>${zone.warning}`;
+            if (zone.circle) {
+                L.circle([zone.circle.lat, zone.circle.lon], {
+                    radius: zone.circle.radiusM,
+                    color,
+                    weight: 2,
+                    fillColor: color,
+                    fillOpacity: 0.12
+                }).bindPopup(popup).addTo(this.layers.airspace);
+            } else if (zone.points && zone.points.length >= 3) {
+                L.polygon(zone.points.map((p) => [p.lat, p.lon]), {
+                    color,
+                    weight: 2,
+                    fillColor: color,
+                    fillOpacity: 0.12
+                }).bindPopup(popup).addTo(this.layers.airspace);
+            }
+        });
+    }
+
+    checkAirspace(position) {
+        if (!position || !this.airspace.length) return;
+        const lat = position.latitude ?? position.lat;
+        const lon = position.longitude ?? position.lon;
+        const alt = position.altitude || 0;
+        for (const zone of this.airspace) {
+            if (!OpenAirParser.relevantAtAltitude(zone, alt)) continue;
+            const dist = OpenAirParser.distanceToZone(lat, lon, zone);
+            if (dist <= 800) {
+                const inside = dist < 0;
+                this.app.showNotification(
+                    inside
+                        ? `空域内: ${zone.name}（${zone.floor.raw}–${zone.ceiling.raw}）`
+                        : `空域接近: ${zone.name} あと ${(dist / 1000).toFixed(1)} km`,
+                    inside ? 'error' : 'warning'
+                );
+                return;
+            }
         }
     }
 
@@ -286,6 +624,10 @@ class RaceUI {
         this.updateHud(this.instruments);
         this.renderNav(this.instruments);
         this.renderLiveThermals(trackData || this.app.trackData);
+        if (!this._airspaceAt || Date.now() - this._airspaceAt > 15000) {
+            this._airspaceAt = Date.now();
+            this.checkAirspace(trackPoint);
+        }
         if (this.overlays.follow && this.mapManager.followPosition) {
             this.mapManager.map.panTo([trackPoint.latitude, trackPoint.longitude]);
         }
@@ -312,7 +654,7 @@ class RaceUI {
         return {
             latitude: tp.lat,
             longitude: tp.lon,
-            altitude: (tp.altitude || 0) + 800,
+            altitude: Math.max((tp.altitude || 0) + 1000, 1500),
             speed: 10,
             timestamp: new Date()
         };
@@ -357,7 +699,7 @@ class RaceUI {
 
         const w = inst.wind;
         document.getElementById('raceHudWind').textContent = w
-            ? `${Geo.cardinal(w.from)} ${WeatherService.msToKmh(w.speed).toFixed(0)} km/h`
+            ? `${Geo.cardinal(w.from)} ${WeatherService.msToKmh(w.speed).toFixed(0)} km/h${w.altitude ? ` @${Math.round(w.altitude)}m` : ''}`
             : '--';
     }
 
@@ -522,7 +864,10 @@ class RaceUI {
             const snapshot = await this.weather.fetchForecast(center.lat, center.lng);
             this.snapshot = snapshot;
             this.lastWeatherCenter = { lat: center.lat, lng: center.lng };
-            this.wind.updateFromWeather(snapshot, this.app.lastPosition ? this.app.lastPosition.altitude : 80);
+            this.wind.updateFromWeather(
+                snapshot,
+                WeatherService.flightWindAltitude(snapshot, this.app.lastPosition && this.app.lastPosition.altitude)
+            );
 
             const b = this.mapManager.map.getBounds();
             const grid = await this.weather.fetchElevationGrid({
@@ -558,18 +903,25 @@ class RaceUI {
         const c = this.snapshot.current;
         const a = this.snapshot.aloft;
         const meteo = this.prediction ? this.prediction.meteo : null;
-        const fused = this.wind.getFused();
+        const fused = this.wind.getFused(
+            WeatherService.flightWindAltitude(this.snapshot, this.app.lastPosition && this.app.lastPosition.altitude)
+        );
+        const lcl = a.lclM != null ? `${a.lclM.toFixed(0)} m` : '--';
         body.innerHTML = `
             <div class="weather-item"><span>観測風 10m</span><span>${Geo.cardinal(c.wind.from)} ${WeatherService.msToKmh(c.wind.speed).toFixed(0)} km/h ガスト ${WeatherService.msToKmh(c.wind.gusts).toFixed(0)}</span></div>
-            <div class="weather-item"><span>融合風</span><span>${Geo.cardinal(fused.from)} ${WeatherService.msToKmh(fused.speed).toFixed(0)} km/h (${fused.source})</span></div>
+            <div class="weather-item"><span>飛行高度の風</span><span>${Geo.cardinal(fused.from)} ${WeatherService.msToKmh(fused.speed).toFixed(0)} km/h @ ${Math.round(fused.altitude || 0)} m (${fused.source})</span></div>
             <div class="weather-item"><span>気温 / 雲量</span><span>${c.temperature.toFixed(0)}°C / ${c.cloudCover.toFixed(0)}% ${this.weather.weatherCodeLabel(c.weatherCode)}</span></div>
             <div class="weather-item"><span>CAPE / LI</span><span>${a.cape.toFixed(0)} J/kg / ${a.liftedIndex == null ? '--' : a.liftedIndex.toFixed(1)}</span></div>
-            <div class="weather-item"><span>混合層 / 日射</span><span>${a.blh.toFixed(0)} m / ${a.shortwave.toFixed(0)} W/m²</span></div>
+            <div class="weather-item"><span>混合層 / 雲底(LCL)</span><span>${a.blh.toFixed(0)} m / ${lcl}</span></div>
+            <div class="weather-item"><span>日射</span><span>${a.shortwave.toFixed(0)} W/m²</span></div>
             <div class="weather-item"><span>サーマル見込み</span><span>${meteo ? `${meteo.trigger} / ${meteo.climbMs.toFixed(1)} m/s / 天井 ${meteo.maxAlt.toFixed(0)} m` : '--'}</span></div>
         `;
         if (aloftEl) {
-            aloftEl.innerHTML = `<h4>高度別の風</h4>` + a.levels.map((l) =>
-                `<div class="weather-item"><span>${l.alt} m</span><span>${Geo.cardinal(l.from)} ${WeatherService.msToKmh(l.speed).toFixed(0)} km/h</span></div>`
+            const flightLevels = (a.levels || []).filter((l) => l.band === 'flight' || l.alt >= 700);
+            const surface = (a.levels || []).filter((l) => l.band === 'surface' || l.alt <= 80);
+            const shown = [...surface.slice(0, 1), ...flightLevels];
+            aloftEl.innerHTML = `<h4>高度別の風（飛行帯）</h4>` + shown.map((l) =>
+                `<div class="weather-item"><span>${l.label || `${l.alt} m`}</span><span>${Geo.cardinal(l.from)} ${WeatherService.msToKmh(l.speed).toFixed(0)} km/h · ${l.alt} m</span></div>`
             ).join('');
         }
     }
@@ -579,12 +931,16 @@ class RaceUI {
         this.renderThermals();
         this.renderStreets();
         this.renderTask();
+        this.renderWaypoints();
+        this.renderAirspace();
     }
 
     renderWind() {
         this.layers.wind.clearLayers();
         if (!this.overlays.wind) return;
-        const wind = this.wind.getFused();
+        const wind = this.wind.getFused(
+            WeatherService.flightWindAltitude(this.snapshot, this.app.lastPosition && this.app.lastPosition.altitude)
+        );
         if (!wind || wind.source === 'none') return;
         const bounds = this.mapManager.map.getBounds();
         const sw = bounds.getSouthWest();

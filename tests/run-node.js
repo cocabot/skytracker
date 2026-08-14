@@ -29,7 +29,10 @@ function createContext() {
         NaN,
         performance: { now: () => Date.now() },
         URLSearchParams,
-        URL
+        URL,
+        Buffer,
+        atob: (s) => Buffer.from(s, 'base64').toString('utf8'),
+        btoa: (s) => Buffer.from(s, 'utf8').toString('base64')
     };
     context.global = context;
     context.window = context;
@@ -70,10 +73,14 @@ async function main() {
     load(context, 'js/thermal-predictor.js');
     load(context, 'js/wind-estimator.js');
     load(context, 'js/race-computer.js');
+    load(context, 'js/waypoints.js');
+    load(context, 'js/openair.js');
+    load(context, 'js/qr-import.js');
     load(context, 'tests/unit/geo.test.js');
     load(context, 'tests/unit/task-engine.test.js');
     load(context, 'tests/unit/thermal-predictor.test.js');
     load(context, 'tests/unit/race-weather.test.js');
+    load(context, 'tests/unit/imports.test.js');
 
     const results = await context.TestFramework.runAllSuites();
     let failed = 0;

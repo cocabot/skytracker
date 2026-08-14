@@ -8,6 +8,8 @@ class SkyTracker {
         this.totalDistance = 0;
         this.settings = this.loadSettings();
         this.groupManager = this.createGroupManager();
+        this.wakeLock = null;
+        this.sheetExpanded = false;
         
         this.init();
     }
@@ -47,8 +49,94 @@ class SkyTracker {
             notification: document.getElementById('notification'),
             centerBtn: document.getElementById('centerBtn'),
             layerBtn: document.getElementById('layerBtn'),
-            fullscreenBtn: document.getElementById('fullscreenBtn')
+            fullscreenBtn: document.getElementById('fullscreenBtn'),
+            infoPanel: document.getElementById('infoPanel'),
+            flightDeck: document.getElementById('flightDeck'),
+            fdAlt: document.getElementById('fdAlt'),
+            fdVario: document.getElementById('fdVario'),
+            fdGs: document.getElementById('fdGs'),
+            fdHdg: document.getElementById('fdHdg'),
+            dockRec: document.getElementById('dockRec'),
+            flightDock: document.getElementById('flightDock'),
+            menuSheet: document.getElementById('menuSheet')
         };
+        this.bindFieldControls();
+    }
+
+    bindFieldControls() {
+        document.getElementById('sheetHandle')?.addEventListener('click', () => this.toggleSheet());
+        document.getElementById('dockRec')?.addEventListener('click', () => this.toggleTracking());
+        document.getElementById('dockLocate')?.addEventListener('click', () => {
+            this.settings.follow = true;
+            if (this.mapManager) this.mapManager.followPosition = true;
+            const follow = document.getElementById('followCheck');
+            if (follow) follow.checked = true;
+            const raceFollow = document.getElementById('toggleFollowRace');
+            if (raceFollow) raceFollow.checked = true;
+            this.mapManager?.centerOnCurrentPosition();
+        });
+        document.getElementById('dockDeck')?.addEventListener('click', () => this.toggleSheet());
+        document.getElementById('dockRace')?.addEventListener('click', () => {
+            this.closeMenuSheet();
+            this.togglePanel('race');
+        });
+        document.getElementById('dockMenu')?.addEventListener('click', () => this.toggleMenuSheet());
+        document.getElementById('menuGroupBtn')?.addEventListener('click', () => {
+            this.closeMenuSheet();
+            this.togglePanel('group');
+        });
+        document.getElementById('menuSettingsBtn')?.addEventListener('click', () => {
+            this.closeMenuSheet();
+            this.togglePanel('settings');
+        });
+        document.getElementById('menuExportBtn')?.addEventListener('click', () => {
+            this.closeMenuSheet();
+            this.exportIGC();
+        });
+        document.getElementById('menuFullscreenBtn')?.addEventListener('click', () => {
+            this.closeMenuSheet();
+            this.toggleFullscreen();
+        });
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && this.isTracking && this.settings.wakeLock) {
+                this.requestWakeLock();
+            }
+        });
+    }
+
+    toggleSheet() {
+        this.sheetExpanded = !this.sheetExpanded;
+        this.elements.infoPanel?.classList.toggle('expanded', this.sheetExpanded);
+        document.getElementById('dockDeck')?.classList.toggle('active', this.sheetExpanded);
+    }
+
+    toggleMenuSheet() {
+        const sheet = this.elements.menuSheet;
+        if (!sheet) return;
+        sheet.classList.toggle('open');
+        document.getElementById('dockMenu')?.classList.toggle('active', sheet.classList.contains('open'));
+    }
+
+    closeMenuSheet() {
+        this.elements.menuSheet?.classList.remove('open');
+        document.getElementById('dockMenu')?.classList.remove('active');
+    }
+
+    async requestWakeLock() {
+        if (!this.settings.wakeLock || !navigator.wakeLock) return;
+        try {
+            this.releaseWakeLock();
+            this.wakeLock = await navigator.wakeLock.request('screen');
+        } catch (error) {
+            console.warn('Wake Lock failed', error);
+        }
+    }
+
+    releaseWakeLock() {
+        if (this.wakeLock) {
+            this.wakeLock.release().catch(() => {});
+            this.wakeLock = null;
+        }
     }
 
     bindEvents() {
@@ -149,6 +237,19 @@ class SkyTracker {
             this.settings.autoSave = e.target.checked;
             this.saveSettings();
         });
+        document.getElementById('wakeLockCheck')?.addEventListener('change', (e) => {
+            this.settings.wakeLock = e.target.checked;
+            this.saveSettings();
+            if (this.isTracking && this.settings.wakeLock) this.requestWakeLock();
+            else this.releaseWakeLock();
+        });
+        document.getElementById('followCheck')?.addEventListener('change', (e) => {
+            this.settings.follow = e.target.checked;
+            this.saveSettings();
+            if (this.mapManager) this.mapManager.followPosition = e.target.checked;
+            const raceFollow = document.getElementById('toggleFollowRace');
+            if (raceFollow) raceFollow.checked = e.target.checked;
+        });
 
         // 通知クローズ
         document.querySelector('.notification-close').addEventListener('click', () => {
@@ -247,6 +348,8 @@ class SkyTracker {
         );
 
         this.showNotification('トラッキングを開始しました。', 'success');
+        this.requestWakeLock();
+        this.elements.dockRec?.classList.add('recording');
     }
 
     stopTracking() {
@@ -266,6 +369,8 @@ class SkyTracker {
         }
 
         this.showNotification('トラッキングを停止しました。', 'info');
+        this.releaseWakeLock();
+        this.elements.dockRec?.classList.remove('recording');
     }
 
     handlePositionUpdate(position) {
@@ -394,6 +499,25 @@ class SkyTracker {
         // 距離
         const distance = this.convertDistance(this.totalDistance);
         this.elements.distance.textContent = `${distance.toFixed(2)} ${this.getDistanceUnit()}`;
+        this.updateFlightDeck(trackPoint, altitude, speed, vario);
+    }
+
+    updateFlightDeck(trackPoint, altitude, speed, vario) {
+        if (this.elements.fdAlt) {
+            this.elements.fdAlt.textContent = `${altitude.toFixed(0)}`;
+        }
+        if (this.elements.fdVario) {
+            this.elements.fdVario.textContent = `${vario >= 0 ? '+' : ''}${vario.toFixed(1)}`;
+            this.elements.fdVario.parentElement?.classList.toggle('up', vario >= 0.3);
+            this.elements.fdVario.parentElement?.classList.toggle('down', vario <= -0.3);
+        }
+        if (this.elements.fdGs) {
+            this.elements.fdGs.textContent = `${speed.toFixed(0)}`;
+        }
+        if (this.elements.fdHdg) {
+            const hdg = Number(trackPoint.heading);
+            this.elements.fdHdg.textContent = Number.isFinite(hdg) && hdg >= 0 ? `${hdg.toFixed(0)}°` : '---';
+        }
     }
 
     startTimeUpdate() {
@@ -589,6 +713,7 @@ class SkyTracker {
         this.elements.groupPanel.classList.remove('open');
         this.elements.settingsPanel.classList.remove('open');
         document.getElementById('racePanel')?.classList.remove('open');
+        this.closeMenuSheet();
         this.elements.overlay.classList.remove('active');
     }
 
@@ -681,7 +806,9 @@ class SkyTracker {
             username: '',
             units: 'metric',
             gpsAccuracy: 'high',
-            autoSave: true
+            autoSave: true,
+            wakeLock: true,
+            follow: false
         };
 
         try {
@@ -719,6 +846,11 @@ class SkyTracker {
         document.getElementById('unitSelect').value = this.settings.units;
         document.getElementById('gpsAccuracySelect').value = this.settings.gpsAccuracy;
         document.getElementById('autoSaveCheck').checked = this.settings.autoSave;
+        const wake = document.getElementById('wakeLockCheck');
+        if (wake) wake.checked = this.settings.wakeLock !== false;
+        const follow = document.getElementById('followCheck');
+        if (follow) follow.checked = !!this.settings.follow;
+        if (this.mapManager) this.mapManager.followPosition = !!this.settings.follow;
     }
 
     updateDisplay() {

@@ -1,15 +1,19 @@
 // Service Worker for SkyTracker
-const CACHE_NAME = 'skytracker-v2';
+const CACHE_NAME = 'skytracker-v3';
 const urlsToCache = [
     '/',
     '/index.html',
     '/styles.css',
     '/styles-race.css',
+    '/styles-mobile.css',
     '/js/app.js',
     '/js/map.js',
     '/js/geo.js',
     '/js/task-engine.js',
     '/js/sample-tasks.js',
+    '/js/waypoints.js',
+    '/js/openair.js',
+    '/js/qr-import.js',
     '/js/weather-service.js',
     '/js/thermal-predictor.js',
     '/js/wind-estimator.js',

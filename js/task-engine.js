@@ -358,7 +358,12 @@ class TaskEngine {
     // ---- インポート ----
 
     static parseXctsk(text) {
-        const data = typeof text === 'string' ? JSON.parse(text) : text;
+        let payload = text;
+        if (typeof text === 'string') {
+            payload = text.trim().replace(/^\uFEFF/, '').replace(/^XCTSK:/i, '').trim();
+            payload = JSON.parse(payload);
+        }
+        const data = payload;
         const tps = (data.turnpoints || []).map((tp) => ({
             name: tp.waypoint && tp.waypoint.name,
             lat: tp.waypoint && tp.waypoint.lat,

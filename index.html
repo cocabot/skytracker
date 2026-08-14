@@ -2,18 +2,20 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1">
     <title>SkyTracker - スカイスポーツライブトラッキング</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="styles-race.css">
+    <link rel="stylesheet" href="styles-mobile.css">
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
     <link rel="manifest" href="manifest.json">
-    <meta name="theme-color" content="#2563eb">
+    <meta name="theme-color" content="#0b1220">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="SkyTracker">
+    <meta name="mobile-web-app-capable" content="yes">
 </head>
 <body>
     <div class="app-container">
@@ -59,10 +61,30 @@
                         <i class="fas fa-expand"></i>
                     </button>
                 </div>
+
+                <div class="flight-deck" id="flightDeck">
+                    <div class="fd-cell">
+                        <span>ALT</span>
+                        <strong id="fdAlt">---</strong>
+                    </div>
+                    <div class="fd-cell fd-vario">
+                        <span>VARIO</span>
+                        <strong id="fdVario">---</strong>
+                    </div>
+                    <div class="fd-cell">
+                        <span>GS</span>
+                        <strong id="fdGs">---</strong>
+                    </div>
+                    <div class="fd-cell">
+                        <span>HDG</span>
+                        <strong id="fdHdg">---</strong>
+                    </div>
+                </div>
             </div>
 
             <!-- 情報パネル -->
-            <div class="info-panel">
+            <div class="info-panel" id="infoPanel">
+                <button class="sheet-handle" id="sheetHandle" type="button" aria-label="計器パネル"></button>
                 <!-- トラッキングコントロール -->
                 <div class="tracking-control">
                     <button class="tracking-btn" id="trackingBtn">
@@ -127,6 +149,36 @@
             </div>
         </main>
 
+        <nav class="flight-dock" id="flightDock">
+            <button type="button" id="dockRec" class="dock-btn">
+                <i class="fas fa-circle"></i>
+                <span>REC</span>
+            </button>
+            <button type="button" id="dockLocate" class="dock-btn">
+                <i class="fas fa-location-arrow"></i>
+                <span>位置</span>
+            </button>
+            <button type="button" id="dockDeck" class="dock-btn">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>計器</span>
+            </button>
+            <button type="button" id="dockRace" class="dock-btn">
+                <i class="fas fa-flag-checkered"></i>
+                <span>レース</span>
+            </button>
+            <button type="button" id="dockMenu" class="dock-btn">
+                <i class="fas fa-bars"></i>
+                <span>メニュー</span>
+            </button>
+        </nav>
+
+        <div class="menu-sheet" id="menuSheet">
+            <button type="button" id="menuGroupBtn"><i class="fas fa-users"></i> グループ</button>
+            <button type="button" id="menuSettingsBtn"><i class="fas fa-cog"></i> 設定</button>
+            <button type="button" id="menuExportBtn"><i class="fas fa-download"></i> IGC</button>
+            <button type="button" id="menuFullscreenBtn"><i class="fas fa-expand"></i> 全画面</button>
+        </div>
+
         <!-- グループパネル -->
         <div class="group-panel" id="groupPanel">
             <div class="panel-header">
@@ -142,7 +194,7 @@
                         <input type="text" id="groupCodeInput" placeholder="コードを入力">
                         <button class="btn btn-primary" id="joinGroupBtn">参加</button>
                     </div>
-                    <div style="margin-top: 10px; display: flex; gap: 5px;">
+                    <div class="debug-only" style="margin-top: 10px; display: flex; gap: 5px;">
                         <button class="btn btn-secondary btn-sm" id="addTestMembersBtn" type="button">
                             テストメンバー追加
                         </button>
@@ -189,6 +241,14 @@
                     <label>自動保存</label>
                     <input type="checkbox" id="autoSaveCheck" checked>
                 </div>
+                <div class="setting-group">
+                    <label>画面常時点灯</label>
+                    <input type="checkbox" id="wakeLockCheck" checked>
+                </div>
+                <div class="setting-group">
+                    <label>位置追従</label>
+                    <input type="checkbox" id="followCheck">
+                </div>
             </div>
         </div>
 
@@ -222,6 +282,9 @@
     <script src="js/p2p-group.js"></script>
     <script src="js/task-engine.js"></script>
     <script src="js/sample-tasks.js"></script>
+    <script src="js/waypoints.js"></script>
+    <script src="js/openair.js"></script>
+    <script src="js/qr-import.js"></script>
     <script src="js/weather-service.js"></script>
     <script src="js/thermal-predictor.js"></script>
     <script src="js/wind-estimator.js"></script>

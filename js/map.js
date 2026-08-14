@@ -21,8 +21,11 @@ class MapManager {
         });
 
         // ズームコントロールを右下に配置
+        const zoomPos = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 768px)').matches)
+            ? 'topright'
+            : 'bottomright';
         L.control.zoom({
-            position: 'bottomright'
+            position: zoomPos
         }).addTo(this.map);
 
         // スケールコントロール
@@ -163,12 +166,13 @@ class MapManager {
         console.warn('Location error:', e.message);
     }
 
-    createCurrentPositionIcon() {
+    createCurrentPositionIcon(heading = 0) {
+        const rot = Number.isFinite(heading) ? heading : 0;
         return L.divIcon({
             className: 'current-position-marker',
-            html: '<div class="position-dot"></div>',
-            iconSize: [20, 20],
-            iconAnchor: [10, 10]
+            html: `<div class="glider-icon" style="transform:rotate(${rot}deg)"></div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 14]
         });
     }
 
@@ -226,9 +230,15 @@ class MapManager {
 
         if (this.currentPositionMarker) {
             this.currentPositionMarker.setLatLng(latlng);
+            const el = this.currentPositionMarker.getElement();
+            const icon = el && el.querySelector('.glider-icon');
+            const heading = Number(trackPoint.heading);
+            if (icon && Number.isFinite(heading) && heading >= 0) {
+                icon.style.transform = `rotate(${heading}deg)`;
+            }
         } else {
             this.currentPositionMarker = L.marker(latlng, {
-                icon: this.createCurrentPositionIcon()
+                icon: this.createCurrentPositionIcon(trackPoint.heading || 0)
             }).addTo(this.map);
         }
 

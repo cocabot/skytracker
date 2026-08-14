@@ -61,6 +61,13 @@ describe('RaceComputer', () => {
         expect(fast).toBeGreaterThan(slow);
     });
 
+    it('ハングコンペは EN-B より巡航が速い', () => {
+        const pg = createGliderPolar(GliderPolarSpecs.pg_enb);
+        const hg = createGliderPolar(GliderPolarSpecs.hg_comp);
+        expect(hg.speedToFly(2, 0)).toBeGreaterThan(pg.speedToFly(2, 0));
+        expect(hg.ld(hg.vBestKmh / 3.6)).toBeGreaterThan(pg.ld(pg.vBestKmh / 3.6));
+    });
+
     it('向かい風で必要高度が増える', () => {
         const engine = new TaskEngine();
         engine.loadTask(SampleTasks.shortTriangle);
@@ -129,12 +136,22 @@ describe('WeatherService', () => {
                 wind_speed_80m: [6],
                 wind_direction_80m: [190],
                 wind_speed_10m: [4],
-                wind_direction_10m: [180]
+                wind_direction_10m: [180],
+                wind_speed_850hPa: [9],
+                wind_direction_850hPa: [210],
+                wind_speed_700hPa: [14],
+                wind_direction_700hPa: [240],
+                dew_point_2m: [8],
+                temperature_2m: [22]
             }
         }, 35.6, 139.7);
         expect(parsed.current.temperature).toBe(22);
         expect(parsed.aloft.cape).toBe(400);
-        expect(parsed.aloft.levels.length).toBeGreaterThan(0);
+        expect(parsed.aloft.lclM).toBeGreaterThan(1000);
+        expect(parsed.aloft.levels.some((l) => l.alt > 1000)).toBeTruthy();
+        const flight = svc.windAtAltitude(parsed, 1500);
+        expect(flight.speed).toBeGreaterThan(6);
+        expect(WeatherService.flightWindAltitude(parsed, null)).toBeGreaterThan(700);
         const aloft = svc.windAtAltitude(parsed, 80);
         expect(aloft.speed).toBeGreaterThan(0);
     });

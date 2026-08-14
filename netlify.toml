@@ -12,7 +12,7 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "geolocation=(self), microphone=(self)"
+    Permissions-Policy = "geolocation=(self), microphone=(self), camera=(self)"
 
 [[headers]]
   for = "/manifest.json"
@@ -36,6 +36,6 @@
     Cache-Control = "public, max-age=3600, must-revalidate"
 
 [[headers]]
-  for = "/styles-race.css"
+  for = "/styles-mobile.css"
   [headers.values]
     Cache-Control = "public, max-age=3600, must-revalidate"

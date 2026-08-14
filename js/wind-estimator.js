@@ -6,11 +6,16 @@ class WindEstimator {
         this.gpsWind = null;
         this.gpsUpdatedAt = 0;
         this.modelUpdatedAt = 0;
+        this.snapshot = null;
     }
 
-    updateFromWeather(snapshot, altitudeM = 80) {
-        if (!snapshot) return this.getFused(altitudeM);
-        let wind = WindEstimator.windAtAltitude(snapshot, altitudeM);
+    updateFromWeather(snapshot, altitudeM) {
+        this.snapshot = snapshot || this.snapshot;
+        const alt = altitudeM != null
+            ? altitudeM
+            : WeatherService.flightWindAltitude(snapshot, null);
+        if (!snapshot) return this.getFused(alt);
+        let wind = WindEstimator.windAtAltitude(snapshot, alt);
         if (!wind && snapshot.current && snapshot.current.wind) {
             wind = snapshot.current.wind;
         }
@@ -19,11 +24,12 @@ class WindEstimator {
                 speed: wind.speed || 0,
                 from: wind.from || wind.direction || 0,
                 source: 'model',
-                alt: wind.alt || altitudeM
+                alt: wind.alt || alt,
+                label: wind.label
             };
             this.modelUpdatedAt = Date.now();
         }
-        return this.getFused(altitudeM);
+        return this.getFused(alt);
     }
 
     /**
@@ -98,34 +104,50 @@ class WindEstimator {
         };
     }
 
-    getFused(altitudeM = 80) {
+    getFused(altitudeM) {
+        const alt = altitudeM != null
+            ? altitudeM
+            : (this.modelWind && this.modelWind.alt) || WeatherService.DEFAULT_FLIGHT_ALT;
+        let model = this.modelWind;
+        if (this.snapshot) {
+            const interpolated = WindEstimator.windAtAltitude(this.snapshot, alt);
+            if (interpolated) {
+                model = {
+                    speed: interpolated.speed || 0,
+                    from: interpolated.from || 0,
+                    source: 'model',
+                    alt: interpolated.alt || alt,
+                    label: interpolated.label
+                };
+            }
+        }
         const gpsAge = Date.now() - this.gpsUpdatedAt;
         const gpsFresh = this.gpsWind && gpsAge < 3 * 60 * 1000;
 
-        if (gpsFresh && this.modelWind) {
+        if (gpsFresh && model) {
             const gpsWeight = gpsAge < 45000 ? 0.75 : 0.45;
             const modelWeight = 1 - gpsWeight;
             const from = Geo.normalizeBearing(
-                this.gpsWind.from + Geo.wrapDelta(this.modelWind.from - this.gpsWind.from) * modelWeight
+                this.gpsWind.from + Geo.wrapDelta(model.from - this.gpsWind.from) * modelWeight
             );
             return {
-                speed: this.gpsWind.speed * gpsWeight + this.modelWind.speed * modelWeight,
+                speed: this.gpsWind.speed * gpsWeight + model.speed * modelWeight,
                 from,
                 to: Geo.normalizeBearing(from + 180),
                 source: 'fused',
                 gps: this.gpsWind,
-                model: this.modelWind,
-                altitude: altitudeM
+                model,
+                altitude: alt
             };
         }
 
         if (gpsFresh) {
-            return { ...this.gpsWind, to: Geo.normalizeBearing(this.gpsWind.from + 180), altitude: altitudeM };
+            return { ...this.gpsWind, to: Geo.normalizeBearing(this.gpsWind.from + 180), altitude: alt };
         }
-        if (this.modelWind) {
-            return { ...this.modelWind, to: Geo.normalizeBearing(this.modelWind.from + 180), altitude: altitudeM };
+        if (model) {
+            return { ...model, to: Geo.normalizeBearing(model.from + 180), altitude: alt };
         }
-        return { speed: 0, from: 0, to: 180, source: 'none', altitude: altitudeM };
+        return { speed: 0, from: 0, to: 180, source: 'none', altitude: alt };
     }
 }
 

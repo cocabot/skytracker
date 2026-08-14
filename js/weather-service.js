@@ -78,6 +78,18 @@ class WeatherService {
                 'wind_direction_120m',
                 'wind_direction_180m',
                 'wind_gusts_10m',
+                'wind_speed_925hPa',
+                'wind_speed_850hPa',
+                'wind_speed_800hPa',
+                'wind_speed_700hPa',
+                'wind_speed_600hPa',
+                'wind_speed_500hPa',
+                'wind_direction_925hPa',
+                'wind_direction_850hPa',
+                'wind_direction_800hPa',
+                'wind_direction_700hPa',
+                'wind_direction_600hPa',
+                'wind_direction_500hPa',
                 'cape',
                 'lifted_index',
                 'convective_inhibition',
@@ -180,12 +192,26 @@ class WeatherService {
     }
 
     buildAloft(hour, wind10) {
-        const levels = [
-            { alt: 10, speed: hour.wind_speed_10m ?? wind10.speed, from: hour.wind_direction_10m ?? wind10.from },
-            { alt: 80, speed: hour.wind_speed_80m, from: hour.wind_direction_80m },
-            { alt: 120, speed: hour.wind_speed_120m, from: hour.wind_direction_120m },
-            { alt: 180, speed: hour.wind_speed_180m, from: hour.wind_direction_180m }
-        ].filter((l) => l.speed != null && l.from != null);
+        const surface = [
+            { alt: 10, speed: hour.wind_speed_10m ?? wind10.speed, from: hour.wind_direction_10m ?? wind10.from, label: '接地 10m', band: 'surface' },
+            { alt: 80, speed: hour.wind_speed_80m, from: hour.wind_direction_80m, label: '接地層 80m', band: 'surface' }
+        ];
+        const pressure = WeatherService.PRESSURE_WIND_LEVELS.map((lvl) => ({
+            alt: Math.round(WeatherService.isaAltitudeFromHpa(lvl.hPa)),
+            speed: hour[lvl.speedKey],
+            from: hour[lvl.dirKey],
+            label: `${lvl.hPa} hPa`,
+            band: 'flight',
+            hPa: lvl.hPa
+        }));
+        const levels = [...surface, ...pressure]
+            .filter((l) => l.speed != null && Number.isFinite(Number(l.speed)) && l.from != null && Number.isFinite(Number(l.from)))
+            .map((l) => ({ ...l, speed: Number(l.speed), from: Number(l.from) }))
+            .sort((a, b) => a.alt - b.alt);
+
+        const temperature2m = Number(hour.temperature_2m ?? 0);
+        const dewPoint = hour.dew_point_2m != null ? Number(hour.dew_point_2m) : null;
+        const lclM = dewPoint != null ? WeatherService.lclMeters(temperature2m, dewPoint) : null;
 
         return {
             levels,
@@ -195,14 +221,50 @@ class WeatherService {
             blh: Number(hour.boundary_layer_height ?? 800),
             shortwave: Number(hour.shortwave_radiation ?? 0),
             directRadiation: Number(hour.direct_radiation ?? 0),
-            dewPoint: hour.dew_point_2m != null ? Number(hour.dew_point_2m) : null,
-            temperature2m: Number(hour.temperature_2m ?? 0),
+            dewPoint,
+            temperature2m,
             temperature80m: hour.temperature_80m != null ? Number(hour.temperature_80m) : null,
             temperature120m: hour.temperature_120m != null ? Number(hour.temperature_120m) : null,
             cloudLow: Number(hour.cloud_cover_low ?? hour.cloud_cover ?? 0),
             cloudMid: Number(hour.cloud_cover_mid ?? 0),
-            precipitation: Number(hour.precipitation ?? 0)
+            precipitation: Number(hour.precipitation ?? 0),
+            lclM,
+            cloudbaseM: lclM
         };
+    }
+
+    static isaAltitudeFromHpa(hPa) {
+        const p = Number(hPa);
+        if (!Number.isFinite(p) || p <= 0) return 0;
+        return 44330.77 * (1 - Math.pow(p / 1013.25, 0.190284));
+    }
+
+    static lclMeters(tempC, dewPointC) {
+        return Math.max(0, 125 * (Number(tempC) - Number(dewPointC)));
+    }
+
+    /**
+     * PG/HG の作業高度。接地層ではなく混合層中〜雲底付近を使う。
+     */
+    static flightWindAltitude(snapshot, gpsAlt) {
+        if (Number.isFinite(gpsAlt) && gpsAlt >= 400) {
+            return gpsAlt;
+        }
+        const aloft = snapshot && snapshot.aloft;
+        const blh = aloft && Number(aloft.blh);
+        const lcl = aloft && Number(aloft.lclM);
+        const candidates = [];
+        if (Number.isFinite(blh) && blh > 700) {
+            candidates.push(blh * 0.65);
+        }
+        if (Number.isFinite(lcl) && lcl > 600) {
+            candidates.push(lcl * 0.75);
+        }
+        if (candidates.length) {
+            const mean = candidates.reduce((s, v) => s + v, 0) / candidates.length;
+            return Math.max(800, Math.min(3500, mean));
+        }
+        return WeatherService.DEFAULT_FLIGHT_ALT;
     }
 
     windAtAltitude(snapshot, altitudeM) {
@@ -295,6 +357,16 @@ class WeatherService {
         return (ms || 0) * 1.94384;
     }
 }
+
+WeatherService.DEFAULT_FLIGHT_ALT = 1500;
+WeatherService.PRESSURE_WIND_LEVELS = [
+    { hPa: 925, speedKey: 'wind_speed_925hPa', dirKey: 'wind_direction_925hPa' },
+    { hPa: 850, speedKey: 'wind_speed_850hPa', dirKey: 'wind_direction_850hPa' },
+    { hPa: 800, speedKey: 'wind_speed_800hPa', dirKey: 'wind_direction_800hPa' },
+    { hPa: 700, speedKey: 'wind_speed_700hPa', dirKey: 'wind_direction_700hPa' },
+    { hPa: 600, speedKey: 'wind_speed_600hPa', dirKey: 'wind_direction_600hPa' },
+    { hPa: 500, speedKey: 'wind_speed_500hPa', dirKey: 'wind_direction_500hPa' }
+];
 
 if (typeof window !== 'undefined') {
     window.WeatherService = WeatherService;

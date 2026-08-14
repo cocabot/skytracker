@@ -5,9 +5,9 @@
   "version": "1.0.0",
   "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
-  "theme_color": "#2563eb",
-  "background_color": "#f8fafc",
+  "orientation": "any",
+  "theme_color": "#0b1220",
+  "background_color": "#0b1220",
   "categories": ["sports", "navigation", "utilities"],
   "lang": "ja",
   "scope": "/",
@@ -80,10 +80,13 @@
     "Real-time position sharing",
     "IGC file export",
     "Group tracking",
-    "Offline support"
+    "QR task import",
+    "OpenAir airspace",
+    "Waypoint CUP/GPX import"
   ],
   "permissions": [
-    "geolocation"
+    "geolocation",
+    "camera"
   ],
   "prefer_related_applications": false,
   "edge_side_panel": {

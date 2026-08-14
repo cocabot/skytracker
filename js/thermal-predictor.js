@@ -14,7 +14,7 @@ class ThermalPredictor {
         const aloft = (snapshot && snapshot.aloft) || {};
         const current = (snapshot && snapshot.current) || {};
         const wind = this.effectiveWind(snapshot);
-        const meteo = this.scoreMeteo(aloft, current);
+        const meteo = this.scoreMeteo(aloft, current, wind);
 
         const cells = (elevationGrid && elevationGrid.cells) || [];
         const rows = (elevationGrid && elevationGrid.rows) || 0;
@@ -55,16 +55,24 @@ class ThermalPredictor {
     }
 
     effectiveWind(snapshot) {
-        const w80 = snapshot && snapshot.aloft && snapshot.aloft.levels
-            ? snapshot.aloft.levels.find((l) => l.alt >= 80) || snapshot.aloft.levels[0]
+        const alt = typeof WeatherService !== 'undefined'
+            ? WeatherService.flightWindAltitude(snapshot, null)
+            : 1500;
+        const interpolated = typeof WindEstimator !== 'undefined'
+            ? WindEstimator.windAtAltitude(snapshot, alt)
             : null;
         const w10 = snapshot && snapshot.current && snapshot.current.wind;
-        const speed = (w80 && w80.speed) || (w10 && w10.speed) || 0;
-        const from = (w80 && w80.from) || (w10 && w10.from) || 0;
-        return { speed, from, to: Geo.normalizeBearing(from + 180) };
+        const speed = (interpolated && interpolated.speed) || (w10 && w10.speed) || 0;
+        const from = (interpolated && interpolated.from) || (w10 && w10.from) || 0;
+        return {
+            speed,
+            from,
+            to: Geo.normalizeBearing(from + 180),
+            alt: (interpolated && interpolated.alt) || alt
+        };
     }
 
-    scoreMeteo(aloft, current) {
+    scoreMeteo(aloft, current, windAloft) {
         const cape = Number(aloft.cape || 0);
         const li = aloft.liftedIndex;
         const blh = Number(aloft.blh || 0);
@@ -72,7 +80,8 @@ class ThermalPredictor {
         const cin = Number(aloft.cin || 0);
         const cloud = Number((current && current.cloudCover) || aloft.cloudLow || 0);
         const precip = Number((current && current.precipitation) || aloft.precipitation || 0);
-        const windSpeed = (current && current.wind && current.wind.speed) || 0;
+        const surfaceWind = (current && current.wind && current.wind.speed) || 0;
+        const flightWind = (windAloft && windAloft.speed) || surfaceWind;
 
         let capeScore = Math.max(0, Math.min(1, cape / 900));
         let liScore = 0.45;
@@ -90,14 +99,19 @@ class ThermalPredictor {
 
         const cinPenalty = Math.max(0, Math.min(0.6, Math.abs(cin) / 200));
         const rainPenalty = precip > 0.2 ? Math.min(0.8, precip / 2) : 0;
-        const windPenalty = windSpeed > 8 ? Math.min(0.5, (windSpeed - 8) / 12) : 0;
+        const surfacePenalty = surfaceWind > 8 ? Math.min(0.35, (surfaceWind - 8) / 14) : 0;
+        const shearPenalty = flightWind > 10 ? Math.min(0.45, (flightWind - 10) / 16) : 0;
 
         let score = 0.28 * capeScore + 0.18 * liScore + 0.28 * sunScore + 0.18 * blhScore + 0.08 * cloudScore;
-        score = score * (1 - cinPenalty) * (1 - rainPenalty) * (1 - windPenalty);
+        score = score * (1 - cinPenalty) * (1 - rainPenalty) * (1 - surfacePenalty) * (1 - shearPenalty);
         score = Math.max(0, Math.min(1, score));
 
         const climbMs = score * 4.2;
-        const maxAlt = Math.max(400, blh * (0.55 + 0.45 * score));
+        const lcl = Number(aloft.lclM || aloft.cloudbaseM || 0);
+        let maxAlt = Math.max(400, blh * (0.55 + 0.45 * score));
+        if (lcl > 400) {
+            maxAlt = Math.min(maxAlt, lcl);
+        }
         let trigger = 'poor';
         if (score >= 0.72) trigger = 'excellent';
         else if (score >= 0.55) trigger = 'good';
@@ -112,6 +126,7 @@ class ThermalPredictor {
             cape,
             liftedIndex: li,
             blh,
+            lcl,
             shortwave: sw,
             cin,
             cloud,
@@ -220,7 +235,7 @@ class ThermalPredictor {
     }
 
     buildCloudStreets(cells, wind, aloft, meteo) {
-        if (wind.speed < 3 || wind.speed > 12 || meteo.score < 0.35) {
+        if (wind.speed < 3 || wind.speed > 14 || meteo.score < 0.35) {
             return [];
         }
         const blh = aloft.blh || 800;

@@ -51,11 +51,16 @@ class OnboardingManager {
         this.bindEvents();
         
         // 初回起動時にオンボーディングを表示
-        if (!this.hasCompletedOnboarding) {
+        if (!this.hasCompletedOnboarding && !this.shouldSkipAutoOnboarding()) {
             setTimeout(() => {
                 this.startOnboarding();
             }, 2000);
         }
+    }
+
+    shouldSkipAutoOnboarding() {
+        if (typeof window === 'undefined' || !window.matchMedia) return false;
+        return window.matchMedia('(max-width: 768px)').matches || window.matchMedia('(pointer: coarse)').matches;
     }
 
     createOnboardingElements() {

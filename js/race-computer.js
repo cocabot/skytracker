@@ -1,39 +1,54 @@
 // レースコンピュータ（XCTrack 相当の計器 + 風修正）
 // マッククリーディ速度、必要高度、ファイナルグライド、カニ角
-const GliderPolar = {
-    vBestKmh: 37,
-    sinkBest: 1.05,
-    k: 0.007,
-    minKmh: 32,
-    maxKmh: 55,
-
-    sink(tasMs) {
-        const v = tasMs * 3.6;
-        return this.sinkBest + this.k * Math.pow(v - this.vBestKmh, 2);
-    },
-
-    ld(tasMs) {
-        const s = this.sink(tasMs);
-        return s > 0.05 ? tasMs / s : 0;
-    },
-
-    speedToFly(mc, headwindMs) {
-        let bestV = this.vBestKmh / 3.6;
-        let bestCost = Infinity;
-        for (let vKmh = this.minKmh; vKmh <= this.maxKmh; vKmh += 0.5) {
-            const tas = vKmh / 3.6;
-            const sink = this.sink(tas);
-            const gs = tas - headwindMs;
-            if (gs < 2) continue;
-            const cost = (sink + Math.max(0, mc)) / gs;
-            if (cost < bestCost) {
-                bestCost = cost;
-                bestV = tas;
-            }
-        }
-        return bestV;
-    }
+const GliderPolarSpecs = {
+    pg_enb: { id: 'pg_enb', name: 'PG EN-B', vBestKmh: 37, sinkBest: 1.05, k: 0.007, minKmh: 32, maxKmh: 55 },
+    pg_enc: { id: 'pg_enc', name: 'PG EN-C', vBestKmh: 39, sinkBest: 0.95, k: 0.006, minKmh: 33, maxKmh: 62 },
+    pg_ccc: { id: 'pg_ccc', name: 'PG CCC', vBestKmh: 42, sinkBest: 0.85, k: 0.0052, minKmh: 34, maxKmh: 70 },
+    hg_sport: { id: 'hg_sport', name: 'HG スポーツ', vBestKmh: 48, sinkBest: 0.90, k: 0.0045, minKmh: 32, maxKmh: 85 },
+    hg_comp: { id: 'hg_comp', name: 'HG コンペ', vBestKmh: 58, sinkBest: 0.72, k: 0.0032, minKmh: 35, maxKmh: 120 }
 };
+
+function createGliderPolar(spec) {
+    const polar = {
+        id: spec.id,
+        name: spec.name,
+        vBestKmh: spec.vBestKmh,
+        sinkBest: spec.sinkBest,
+        k: spec.k,
+        minKmh: spec.minKmh,
+        maxKmh: spec.maxKmh,
+
+        sink(tasMs) {
+            const v = tasMs * 3.6;
+            return this.sinkBest + this.k * Math.pow(v - this.vBestKmh, 2);
+        },
+
+        ld(tasMs) {
+            const s = this.sink(tasMs);
+            return s > 0.05 ? tasMs / s : 0;
+        },
+
+        speedToFly(mc, headwindMs) {
+            let bestV = this.vBestKmh / 3.6;
+            let bestCost = Infinity;
+            for (let vKmh = this.minKmh; vKmh <= this.maxKmh; vKmh += 0.5) {
+                const tas = vKmh / 3.6;
+                const sink = this.sink(tas);
+                const gs = tas - headwindMs;
+                if (gs < 2) continue;
+                const cost = (sink + Math.max(0, mc)) / gs;
+                if (cost < bestCost) {
+                    bestCost = cost;
+                    bestV = tas;
+                }
+            }
+            return bestV;
+        }
+    };
+    return polar;
+}
+
+const GliderPolar = createGliderPolar(GliderPolarSpecs.pg_enb);
 
 class RaceComputer {
     constructor(taskEngine, windEstimator, options = {}) {
@@ -41,19 +56,28 @@ class RaceComputer {
         this.windEstimator = windEstimator;
         this.mc = options.mc != null ? options.mc : 1.2;
         this.reserveM = options.reserveM != null ? options.reserveM : 80;
-        this.polar = options.polar || GliderPolar;
+        this.polar = options.polar || createGliderPolar(
+            GliderPolarSpecs[options.gliderClass] || GliderPolarSpecs.pg_enb
+        );
     }
 
     setMacCready(mc) {
         this.mc = Math.max(0, Math.min(6, Number(mc) || 0));
     }
 
+    setGliderClass(id) {
+        const spec = GliderPolarSpecs[id] || GliderPolarSpecs.pg_enb;
+        this.polar = createGliderPolar(spec);
+        return this.polar;
+    }
+
     compute(position) {
         const progress = this.taskEngine
             ? this.taskEngine.getProgress(position)
             : null;
+        const alt = position && position.altitude;
         const wind = this.windEstimator
-            ? this.windEstimator.getFused(position && position.altitude)
+            ? this.windEstimator.getFused(alt)
             : { speed: 0, from: 0, to: 180, source: 'none' };
 
         if (!progress || !progress.nextTurnpoint || !position) {
@@ -61,6 +85,7 @@ class RaceComputer {
                 progress,
                 wind,
                 mc: this.mc,
+                polar: this.polar,
                 ready: false
             };
         }
@@ -111,6 +136,7 @@ class RaceComputer {
             progress,
             wind,
             mc: this.mc,
+            polar: this.polar,
             nextTp,
             nextOpt,
             bearing,
@@ -203,7 +229,9 @@ class RaceComputer {
 if (typeof window !== 'undefined') {
     window.RaceComputer = RaceComputer;
     window.GliderPolar = GliderPolar;
+    window.GliderPolarSpecs = GliderPolarSpecs;
+    window.createGliderPolar = createGliderPolar;
 }
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { RaceComputer, GliderPolar };
+    module.exports = { RaceComputer, GliderPolar, GliderPolarSpecs, createGliderPolar };
 }

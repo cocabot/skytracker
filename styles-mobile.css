@@ -1,0 +1,362 @@
+/* フィールド用モバイル UI：フルスクリーン地図 + フライトデッキ + ボトムドック */
+
+:root {
+    --dock-h: 64px;
+    --header-h: 56px;
+}
+
+html, body {
+    touch-action: manipulation;
+}
+
+.flight-deck {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    right: 72px;
+    z-index: 1150;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
+    pointer-events: none;
+}
+
+.fd-cell {
+    background: rgba(8, 12, 24, 0.78);
+    color: #f8fafc;
+    border-radius: 12px;
+    padding: 6px 8px;
+    backdrop-filter: blur(10px);
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.fd-cell span {
+    display: block;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+    font-weight: 600;
+}
+
+.fd-cell strong {
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.2;
+}
+
+.fd-cell.fd-vario.up strong { color: #4ade80; }
+.fd-cell.fd-vario.down strong { color: #fb7185; }
+
+.flight-dock,
+.menu-sheet,
+.sheet-handle {
+    display: none;
+}
+
+.glider-icon {
+    width: 28px;
+    height: 28px;
+    background: #38bdf8;
+    clip-path: polygon(50% 0, 92% 100%, 50% 78%, 8% 100%);
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+}
+
+.wp-library-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+    max-height: 140px;
+    overflow: auto;
+}
+
+.wp-chip {
+    border: 1px solid var(--border-color);
+    background: var(--surface-color);
+    border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.wp-chip.selected {
+    background: #f59e0b;
+    color: #111827;
+    border-color: #d97706;
+}
+
+.race-paste {
+    width: 100%;
+    margin-top: 8px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 8px;
+    font-size: 13px;
+    resize: vertical;
+}
+
+.qr-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 4000;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+}
+
+.qr-overlay.hidden {
+    display: none;
+}
+
+.qr-overlay video {
+    flex: 1;
+    width: 100%;
+    object-fit: cover;
+}
+
+.qr-toolbar {
+    padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    background: #0b1220;
+    color: #e2e8f0;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+@media (max-width: 768px) {
+    .app-container {
+        height: 100dvh;
+        padding-top: env(safe-area-inset-top);
+        background: #0b1220;
+    }
+
+    .header {
+        min-height: 44px;
+        background: rgba(11, 18, 32, 0.92);
+        border-bottom: none;
+    }
+
+    .header-content {
+        padding: 6px 12px;
+    }
+
+    .logo h1 {
+        font-size: 1rem;
+        color: #f8fafc;
+    }
+
+    .header-controls {
+        display: none;
+    }
+
+    .main-content {
+        flex: 1;
+        min-height: 0;
+        position: relative;
+    }
+
+    .map-container {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+    }
+
+    .info-panel {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: calc(var(--dock-h) + env(safe-area-inset-bottom));
+        width: 100%;
+        height: auto;
+        max-height: min(72vh, 560px);
+        z-index: 1300;
+        border: none;
+        border-radius: 18px 18px 0 0;
+        transform: translateY(calc(100% - 22px));
+        transition: transform 0.22s ease;
+        box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.28);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .info-panel.expanded {
+        transform: translateY(0);
+    }
+
+    .sheet-handle {
+        display: block;
+        width: 44px;
+        height: 22px;
+        margin: 0 auto;
+        background: transparent;
+        border: none;
+        position: relative;
+        flex: 0 0 22px;
+    }
+
+    .sheet-handle::before {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: 8px;
+        width: 42px;
+        height: 4px;
+        margin-left: -21px;
+        border-radius: 999px;
+        background: #cbd5e1;
+    }
+
+    .tracking-control,
+    .flight-info,
+    .action-buttons {
+        padding: 0.75rem 1rem;
+    }
+
+    .info-panel:not(.expanded) .flight-info,
+    .info-panel:not(.expanded) .action-buttons {
+        display: none;
+    }
+
+    .flight-dock {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        position: fixed;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: calc(var(--dock-h) + env(safe-area-inset-bottom));
+        padding: 6px 6px env(safe-area-inset-bottom);
+        background: rgba(8, 12, 24, 0.94);
+        z-index: 1400;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .dock-btn {
+        background: transparent;
+        border: none;
+        color: #cbd5e1;
+        min-height: 44px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 2px;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+    }
+
+    .dock-btn i {
+        font-size: 16px;
+    }
+
+    .dock-btn.active,
+    .dock-btn.recording {
+        color: #38bdf8;
+    }
+
+    .dock-btn.recording i {
+        color: #f43f5e;
+    }
+
+    .menu-sheet {
+        display: none;
+        position: fixed;
+        left: 8px;
+        right: 8px;
+        bottom: calc(var(--dock-h) + 10px + env(safe-area-inset-bottom));
+        background: #0f172a;
+        color: #f8fafc;
+        border-radius: 14px;
+        z-index: 1500;
+        overflow: hidden;
+        box-shadow: var(--shadow-lg);
+    }
+
+    .menu-sheet.open {
+        display: block;
+    }
+
+    .menu-sheet button {
+        width: 100%;
+        background: transparent;
+        border: none;
+        color: inherit;
+        text-align: left;
+        padding: 14px 16px;
+        min-height: 44px;
+        font-size: 15px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .map-controls {
+        display: none;
+    }
+
+    .extended-map-controls {
+        top: auto !important;
+        bottom: calc(var(--dock-h) + 108px + env(safe-area-inset-bottom));
+        right: 8px !important;
+    }
+
+    .extended-map-controls .layer-selector,
+    .extended-map-controls [id="3dToggle"],
+    .extended-map-controls [id="terrainToggle"] {
+        display: none;
+    }
+
+    .debug-only {
+        display: none !important;
+    }
+
+    .race-hud {
+        left: 8px;
+        right: 8px;
+        bottom: calc(var(--dock-h) + 28px + env(safe-area-inset-bottom));
+        max-width: none;
+        min-width: 0;
+    }
+
+    .race-panel,
+    .group-panel,
+    .settings-panel {
+        width: 100%;
+        right: -100%;
+        padding-top: env(safe-area-inset-top);
+    }
+
+    .leaflet-control-zoom {
+        margin-bottom: 8px !important;
+    }
+
+    .airspace-warning {
+        bottom: calc(var(--dock-h) + 96px + env(safe-area-inset-bottom)) !important;
+        left: 8px !important;
+        max-width: calc(100% - 16px) !important;
+    }
+
+    .notification {
+        top: calc(env(safe-area-inset-top) + 52px);
+    }
+
+    .btn, .dock-btn, .map-control-btn, .tracking-btn {
+        min-height: 44px;
+    }
+}
+
+@media (min-width: 769px) {
+    .flight-deck {
+        max-width: 420px;
+        right: auto;
+        width: 400px;
+    }
+
+    .sheet-handle {
+        display: none;
+    }
+}

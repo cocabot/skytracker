@@ -34,7 +34,7 @@
       }
     },
     {
-      "src": "/styles-race.css",
+      "src": "/styles-mobile.css",
       "headers": {
         "Cache-Control": "public, max-age=3600, must-revalidate"
       }
