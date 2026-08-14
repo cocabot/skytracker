@@ -3,14 +3,14 @@
   "short_name": "SkyTracker",
   "description": "パラグライダー、ハンググライダー、グライダーなどのスカイスポーツ用ライブトラッキングアプリ",
   "version": "1.0.0",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "orientation": "any",
   "theme_color": "#0b1220",
   "background_color": "#0b1220",
   "categories": ["sports", "navigation", "utilities"],
   "lang": "ja",
-  "scope": "/",
+  "scope": "./",
   "icons": [
     {
       "src": "icons/icon-72x72.png",
