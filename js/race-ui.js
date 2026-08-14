@@ -676,9 +676,11 @@ class RaceUI {
         document.getElementById('raceHudNext').textContent = p.nextTurnpoint
             ? `${p.nextTurnpoint.name} (${p.nextTurnpoint.type})`
             : this.taskEngine.task.name;
-        document.getElementById('raceHudDist').textContent = p.distanceToCylinderM != null
-            ? `${(p.distanceToCylinderM / 1000).toFixed(2)} km`
-            : '-- km';
+        document.getElementById('raceHudDist').textContent = p.inNextCylinder
+            ? '円筒内'
+            : (p.distanceToCylinderM != null
+                ? `${(p.distanceToCylinderM / 1000).toFixed(2)} km`
+                : '-- km');
         document.getElementById('raceHudBrg').textContent = p.bearing != null
             ? `${p.bearing.toFixed(0)}° ${Geo.cardinal(p.bearing)}`
             : '---°';

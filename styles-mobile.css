@@ -320,6 +320,28 @@ html, body {
         bottom: calc(var(--dock-h) + 28px + env(safe-area-inset-bottom));
         max-width: none;
         min-width: 0;
+        padding: 0.45rem 0.65rem;
+    }
+
+    .race-hud-row {
+        gap: 0.45rem;
+    }
+
+    .race-hud-row + .race-hud-row {
+        margin-top: 0.35rem;
+        padding-top: 0.35rem;
+    }
+
+    .race-hud strong {
+        font-size: 0.82rem;
+    }
+
+    .race-hud-label {
+        font-size: 0.58rem;
+    }
+
+    .fd-cell strong {
+        font-size: 1.15rem;
     }
 
     .race-panel,
