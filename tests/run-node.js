@@ -31,6 +31,7 @@ function createContext() {
         URLSearchParams,
         URL,
         Buffer,
+        Intl,
         atob: (s) => Buffer.from(s, 'base64').toString('utf8'),
         btoa: (s) => Buffer.from(s, 'utf8').toString('base64')
     };
@@ -71,6 +72,8 @@ async function main() {
     load(context, 'js/sample-tasks.js');
     load(context, 'js/weather-service.js');
     load(context, 'js/thermal-predictor.js');
+    load(context, 'js/jhf-competition-thermals.js');
+    load(context, 'js/thermal-climatology.js');
     load(context, 'js/wind-estimator.js');
     load(context, 'js/race-computer.js');
     load(context, 'js/waypoints.js');
@@ -79,6 +82,7 @@ async function main() {
     load(context, 'tests/unit/geo.test.js');
     load(context, 'tests/unit/task-engine.test.js');
     load(context, 'tests/unit/thermal-predictor.test.js');
+    load(context, 'tests/unit/thermal-climatology.test.js');
     load(context, 'tests/unit/race-weather.test.js');
     load(context, 'tests/unit/imports.test.js');
 

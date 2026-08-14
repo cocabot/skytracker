@@ -161,6 +161,8 @@ describe('WeatherService', () => {
         const url = svc.buildForecastUrl(35.4, 138.6);
         expect(url).toContain('wind_speed_850hPa');
         expect(url).toContain('wind_speed_700hPa');
+        expect(url).toContain('temperature_850hPa');
+        expect(url).toContain('soil_moisture_0_to_7cm');
         svc.lastForecast = {
             hourTime: Date.parse('2026-08-14T06:00:00Z'),
             timezone: 'Asia/Tokyo',
@@ -168,5 +170,16 @@ describe('WeatherService', () => {
             aloft: { hasPressureWinds: true }
         };
         expect(svc.getStatus().message).toContain('15:00');
+    });
+
+    it('飛行空域は地図の狭い表示範囲ではなく半径約45km', () => {
+        const box = WeatherService.flightAirspaceBounds({ lat: 35.375, lon: 138.536 });
+        expect(box.radiusKm).toBe(45);
+        const nsKm = Geo.distance(box.south, box.west, box.north, box.west) / 1000;
+        const ewKm = Geo.distance(box.south, box.west, box.south, box.east) / 1000;
+        expect(nsKm).toBeGreaterThan(80);
+        expect(nsKm).toBeLessThan(100);
+        expect(ewKm).toBeGreaterThan(80);
+        expect(WeatherService.DEFAULT_AIRSPACE_KM).toBe(45);
     });
 });

@@ -113,4 +113,77 @@ describe('ThermalPredictor', () => {
         expect(core).toBeTruthy();
         expect(core.circling).toBeTruthy();
     });
+
+    it('浅い混合層ではCAPEが高くても上昇は約2m/sにならない', () => {
+        const shallow = predictor.scoreMeteo({
+            cape: 800,
+            liftedIndex: -3,
+            cin: 0,
+            blh: 350,
+            shortwave: 750,
+            cloudLow: 20,
+            precipitation: 0,
+            temperature2m: 22
+        }, { temperature: 22, cloudCover: 20, precipitation: 0, wind: { speed: 4, from: 270 } });
+        expect(shallow.wStar).toBeLessThan(2.0);
+        expect(shallow.climbMs).toBeLessThan(1.5);
+        expect(shallow.trigger === 'excellent').toBeFalsy();
+        expect(shallow.climbMs >= 2).toBeFalsy();
+    });
+
+    it('B/Sが小さい（シアが大きい）と上昇が落ちる', () => {
+        const aloft = {
+            cape: 400, liftedIndex: -1, cin: 0, blh: 1600, shortwave: 700,
+            cloudLow: 25, precipitation: 0, temperature2m: 24
+        };
+        const current = { temperature: 24, cloudCover: 25, precipitation: 0, wind: { speed: 4, from: 270 } };
+        const organized = predictor.scoreMeteo(aloft, current, { speed: 5, from: 270 });
+        const sheared = predictor.scoreMeteo(aloft, current, { speed: 14, from: 270 });
+        expect(organized.bOverS).toBeGreaterThan(sheared.bOverS);
+        expect(organized.climbMs).toBeGreaterThan(sheared.climbMs);
+        expect(organized.score).toBeGreaterThan(sheared.score);
+    });
+
+    it('午前は東斜面、午後は西斜面が強い', () => {
+        const cells = [];
+        for (let r = 0; r < 5; r++) {
+            for (let c = 0; c < 5; c++) {
+                cells.push({
+                    lat: 35.4 + r * 0.01,
+                    lon: 138.5 + c * 0.01,
+                    elevation: 400 - c * 80,
+                    row: r,
+                    col: c
+                });
+            }
+        }
+        const slope = { rows: 5, cols: 5, cells };
+        const morning = predictor.predict(snapshot({
+            aloft: Object.assign({}, snapshot().aloft, { localHour: 8 })
+        }), slope);
+        const afternoon = predictor.predict(snapshot({
+            aloft: Object.assign({}, snapshot().aloft, { localHour: 15 })
+        }), slope);
+        const mCell = morning.cells.find((c) => c.row === 2 && c.col === 2);
+        const aCell = afternoon.cells.find((c) => c.row === 2 && c.col === 2);
+        expect(mCell.solar).toBeGreaterThan(aCell.solar);
+        expect(mCell.climbMs).toBeGreaterThan(aCell.climbMs);
+    });
+
+    it('IGC相当（varioなし）の高度列から上昇を抽出する', () => {
+        const start = new Date('2024-06-01T03:00:00Z');
+        const points = [];
+        for (let i = 0; i < 28; i++) {
+            points.push({
+                timestamp: new Date(start.getTime() + i * 5000),
+                latitude: 35.375,
+                longitude: 138.536,
+                altitude: 1200 + i * 6
+            });
+        }
+        const live = predictor.extractLiveThermals(points);
+        expect(live.length).toBeGreaterThan(0);
+        expect(live[0].gain).toBeGreaterThan(50);
+        expect(live[0].climbMs).toBeGreaterThan(0.5);
+    });
 });
